@@ -7,11 +7,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(SFML 2.5 COMPONENTS graphics window system REQUIRED)
 
 add_executable(banking_admin_sfml
-  src/main.cpp
-  src/FileManager.cpp
-  src/Bank.cpp
-  src/Widgets.cpp
-  src/UI.cpp
+    src/main.cpp
+    src/FileManager.cpp
+    src/Bank.cpp
+    src/Widgets.cpp
+    src/UI.cpp
+    src/ATM.cpp
 )
 
 target_include_directories(banking_admin_sfml PRIVATE src)
