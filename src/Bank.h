@@ -53,6 +53,15 @@ public:
     std::vector<Transaction> allTransactions() const;
     std::vector<Transaction> transactionsFor(long long accNo) const;
 
+    // ----- ATM Operations ------------------------------------------------------
+    std::optional<Customer> authenticate(long long accNo, const std::string& pin) const;
+
+    OpResult changePin(long long accNo, const std::string& oldPin, const std::string& newPin);
+
+    std::optional<double> getBalance(long long accNo) const;
+
+    std::vector<Transaction> miniStatement(long long accNo, size_t count = 5) const;
+
     // ----- PIN reset (requires identity verification) ---------------------------
     // Verification: caller must supply the account's CNIC as it is on file.
     OpResult resetPin(long long accNo, const std::string& cnicVerification, const std::string& newPin);

@@ -1,6 +1,7 @@
 #include "Bank.h"
 #include <algorithm>
 #include <cctype>
+#include <iterator>
 
 Bank::Bank(std::string dataDir) : fm_(std::move(dataDir)) {
     fm_.init();
@@ -55,6 +56,92 @@ std::optional<Customer> Bank::findByAccountNumber(long long accNo) const {
     auto accounts = fm_.loadAccounts();
     for (auto& c : accounts) if (c.accountNumber == accNo) return c;
     return std::nullopt;
+}
+
+std::optional<Customer> Bank::authenticate(long long accNo, const std::string& pin) const
+{
+    auto accounts = fm_.loadAccounts();
+
+    for (const auto& c : accounts)
+    {
+        if (c.accountNumber == accNo &&
+            c.pin == pin &&
+            c.status == "Active")
+        {
+            return c;
+        }
+    }
+
+    return std::nullopt;
+}
+
+OpResult Bank::changePin(long long accNo,
+                         const std::string& oldPin,
+                         const std::string& newPin)
+{
+    if (!isFourDigitPin(newPin))
+        return OpResult::Fail("New PIN must be exactly 4 digits.");
+
+    auto accounts = fm_.loadAccounts();
+
+    for (auto& c : accounts)
+    {
+        if (c.accountNumber == accNo)
+        {
+            if (c.status != "Active")
+                return OpResult::Fail("Account is not active.");
+
+            if (c.pin != oldPin)
+                return OpResult::Fail("Incorrect old PIN.");
+
+            c.pin = newPin;
+            fm_.saveAccounts(accounts);
+
+            Transaction t;
+            t.accountNumber = accNo;
+            t.type = "ATM_PinChange";
+            t.amount = 0;
+            t.balanceAfter = c.balance;
+            t.timestamp = FileManager::now();
+            t.note = "PIN changed via ATM.";
+
+            fm_.appendTransaction(t);
+
+            return OpResult::Ok("PIN changed successfully.");
+        }
+    }
+
+    return OpResult::Fail("Account not found.");
+}
+
+std::optional<double> Bank::getBalance(long long accNo) const
+{
+    auto accounts = fm_.loadAccounts();
+
+    for (const auto& c : accounts)
+    {
+        if (c.accountNumber == accNo)
+        {
+            return c.balance;
+        }
+    }
+
+    return std::nullopt;
+}
+
+
+std::vector<Transaction> Bank::miniStatement(long long accNo,
+                                             size_t count) const
+{
+    auto txns = fm_.loadTransactionsFor(accNo);
+
+    if (txns.size() <= count)
+        return txns;
+
+    return std::vector<Transaction>(
+        txns.end() - count,
+        txns.end()
+    );
 }
 
 static std::string toLower(const std::string& s) {
