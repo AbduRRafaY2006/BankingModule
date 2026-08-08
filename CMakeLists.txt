@@ -8,6 +8,7 @@ find_package(SFML 2.5 COMPONENTS graphics window system REQUIRED)
 
 add_executable(banking_admin_sfml
     src/main.cpp
+  src/Launcher.cpp
     src/FileManager.cpp
     src/Bank.cpp
     src/Widgets.cpp

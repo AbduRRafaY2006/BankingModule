@@ -1,6 +1,7 @@
 #include "ATM.h"
 #include "Widgets.h"
 #include <SFML/Graphics.hpp>
+#include <algorithm>
 #include <memory>
 #include <vector>
 #include <sstream>
@@ -55,7 +56,7 @@ enum class Screen {
 // Forward declarations for builders (each screen implemented separately)
 static void BuildLoginScreen(std::vector<std::unique_ptr<Widget>>& owner, std::vector<Widget*>& tab,
                              sf::Font& regular, sf::Font& bold, Bank& bank,
-                             Screen& current, long long& loggedIn, Label*& outMsg);
+                             Screen& current, long long& loggedIn, bool& shouldClose, Label*& outMsg);
 static void BuildDashboard(std::vector<std::unique_ptr<Widget>>& owner, std::vector<Widget*>& tab,
                            sf::Font& regular, sf::Font& bold, Bank& bank,
                            Screen& current, long long& loggedIn, Label*& welcomeLabel);
@@ -86,6 +87,7 @@ void RunATMUI(Bank& bank) {
     std::vector<std::unique_ptr<Widget>> owner;
     Screen current = Screen::Login;
     long long loggedInAccount = 0;
+    bool shouldClose = false;
 
     // per-screen widget groups
     std::vector<Widget*> tabLogin, tabDashboard, tabBalance, tabDeposit, tabWithdraw, tabMini, tabChange;
@@ -99,7 +101,7 @@ void RunATMUI(Bank& bank) {
     Label* changePinRes = nullptr;
 
     // Build screens (each function wires callbacks and fills owner/tab vectors)
-    BuildLoginScreen(owner, tabLogin, regular, bold, bank, current, loggedInAccount, loginMsg);
+    BuildLoginScreen(owner, tabLogin, regular, bold, bank, current, loggedInAccount, shouldClose, loginMsg);
     BuildDashboard(owner, tabDashboard, regular, bold, bank, current, loggedInAccount, welcomeLabel);
     BuildBalanceScreen(owner, tabBalance, regular, bold, bank, current, loggedInAccount, balanceLabel);
     BuildDepositScreen(owner, tabDeposit, regular, bold, bank, current, loggedInAccount, depositRes);
@@ -117,6 +119,11 @@ void RunATMUI(Bank& bank) {
             if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) window.close();
 
             for (auto* w : *tabs[static_cast<int>(current)]) w->handleEvent(event, window);
+        }
+
+        if (shouldClose) {
+            window.close();
+            continue;
         }
 
         // Some screens need to refresh dynamic content when shown: update them here
@@ -155,7 +162,7 @@ void RunATMUI(Bank& bank) {
 
 static void BuildLoginScreen(std::vector<std::unique_ptr<Widget>>& owner, std::vector<Widget*>& tab,
                              sf::Font& regular, sf::Font& bold, Bank& bank,
-                             Screen& current, long long& loggedIn, Label*& outMsg) {
+                             Screen& current, long long& loggedIn, bool& shouldClose, Label*& outMsg) {
     float x = 40.f, y = 80.f;
     auto accBox = add<TextBox>(owner, tab, regular, "Account number", true);
     accBox->setPosition(x, y); accBox->setSize(320.f, 40.f);
@@ -167,7 +174,7 @@ static void BuildLoginScreen(std::vector<std::unique_ptr<Widget>>& owner, std::v
     outMsg->setPosition(x, y + 140.f);
 
     auto loginBtn = add<Button>(owner, tab, regular, "Enter",
-        [&] {
+        [accBox, pinBox, outMsg, &bank, &current, &loggedIn] {
             long long acc = 0;
             try { acc = std::stoll(accBox->value()); } catch (...) { outMsg->setText("Invalid account number."); return; }
             auto c = bank.findByAccountNumber(acc);
@@ -182,7 +189,7 @@ static void BuildLoginScreen(std::vector<std::unique_ptr<Widget>>& owner, std::v
     loginBtn->setPosition(x, y + 96.f); loginBtn->setSize(160.f, 42.f);
 
     auto quitBtn = add<Button>(owner, tab, regular, "Quit",
-        [&] { /* close window via event loop Escape or close */ }, ui::theme.textDim, ui::theme.textLight);
+        [&shouldClose] { shouldClose = true; }, ui::theme.textDim, ui::theme.textLight);
     quitBtn->setPosition(x + 180.f, y + 96.f); quitBtn->setSize(120.f, 42.f);
 }
 
@@ -194,27 +201,27 @@ static void BuildDashboard(std::vector<std::unique_ptr<Widget>>& owner, std::vec
     welcomeLabel->setPosition(x, y - 36.f);
 
     auto balBtn = add<Button>(owner, tab, regular, "Balance Inquiry",
-        [&] { current = Screen::Balance; }, ui::theme.accent, ui::theme.textLight);
+        [&current] { current = Screen::Balance; }, ui::theme.accent, ui::theme.textLight);
     balBtn->setPosition(x, y); balBtn->setSize(260.f, 44.f);
 
     auto depBtn = add<Button>(owner, tab, regular, "Deposit",
-        [&] { current = Screen::Deposit; }, ui::theme.success, ui::theme.textLight);
+        [&current] { current = Screen::Deposit; }, ui::theme.success, ui::theme.textLight);
     depBtn->setPosition(x, y + gap); depBtn->setSize(260.f, 44.f);
 
     auto wdrBtn = add<Button>(owner, tab, regular, "Withdraw",
-        [&] { current = Screen::Withdraw; }, ui::theme.danger, ui::theme.textLight);
+        [&current] { current = Screen::Withdraw; }, ui::theme.danger, ui::theme.textLight);
     wdrBtn->setPosition(x, y + gap * 2); wdrBtn->setSize(260.f, 44.f);
 
     auto miniBtn = add<Button>(owner, tab, regular, "Mini Statement",
-        [&] { current = Screen::MiniStatement; }, ui::theme.accent, ui::theme.textLight);
+        [&current] { current = Screen::MiniStatement; }, ui::theme.accent, ui::theme.textLight);
     miniBtn->setPosition(x, y + gap * 3); miniBtn->setSize(260.f, 44.f);
 
     auto pinBtn = add<Button>(owner, tab, regular, "Change PIN",
-        [&] { current = Screen::ChangePin; }, ui::theme.warning, ui::theme.textDark);
+        [&current] { current = Screen::ChangePin; }, ui::theme.warning, ui::theme.textDark);
     pinBtn->setPosition(x + 320.f, y); pinBtn->setSize(220.f, 44.f);
 
     auto logoutBtn = add<Button>(owner, tab, regular, "Logout",
-        [&] { loggedIn = 0; current = Screen::Login; }, ui::theme.textDim, ui::theme.textLight);
+        [&loggedIn, &current] { loggedIn = 0; current = Screen::Login; }, ui::theme.textDim, ui::theme.textLight);
     logoutBtn->setPosition(x + 320.f, y + gap); logoutBtn->setSize(220.f, 44.f);
 }
 
@@ -226,7 +233,7 @@ static void BuildBalanceScreen(std::vector<std::unique_ptr<Widget>>& owner, std:
     balanceLabel->setPosition(x, y);
 
     auto back = add<Button>(owner, tab, regular, "Back",
-        [&] { current = Screen::Dashboard; }, ui::theme.textDim, ui::theme.textLight);
+        [&current] { current = Screen::Dashboard; }, ui::theme.textDim, ui::theme.textLight);
     back->setPosition(40.f, 360.f); back->setSize(120.f, 40.f);
 }
 
@@ -241,7 +248,7 @@ static void BuildDepositScreen(std::vector<std::unique_ptr<Widget>>& owner, std:
     resLabel->setPosition(x, y + 100.f);
 
     auto doDep = add<Button>(owner, tab, regular, "Deposit",
-        [&] {
+        [amt, resLabel, &loggedIn, &bank] {
             if (loggedIn == 0) { resLabel->setText("Not logged in."); return; }
             double v = 0;
             try { v = std::stod(amt->value()); } catch (...) { resLabel->setText("Invalid amount."); return; }
@@ -253,7 +260,7 @@ static void BuildDepositScreen(std::vector<std::unique_ptr<Widget>>& owner, std:
     doDep->setPosition(x + 260.f, y); doDep->setSize(140.f, 40.f);
 
     auto back = add<Button>(owner, tab, regular, "Back",
-        [&] { current = Screen::Dashboard; }, ui::theme.textDim, ui::theme.textLight);
+        [&current] { current = Screen::Dashboard; }, ui::theme.textDim, ui::theme.textLight);
     back->setPosition(40.f, 360.f); back->setSize(120.f, 40.f);
 }
 
@@ -268,7 +275,7 @@ static void BuildWithdrawScreen(std::vector<std::unique_ptr<Widget>>& owner, std
     resLabel->setPosition(x, y + 100.f);
 
     auto doW = add<Button>(owner, tab, regular, "Withdraw",
-        [&] {
+        [amt, resLabel, &loggedIn, &bank] {
             if (loggedIn == 0) { resLabel->setText("Not logged in."); return; }
             double v = 0;
             try { v = std::stod(amt->value()); } catch (...) { resLabel->setText("Invalid amount."); return; }
@@ -280,7 +287,7 @@ static void BuildWithdrawScreen(std::vector<std::unique_ptr<Widget>>& owner, std
     doW->setPosition(x + 260.f, y); doW->setSize(140.f, 40.f);
 
     auto back = add<Button>(owner, tab, regular, "Back",
-        [&] { current = Screen::Dashboard; }, ui::theme.textDim, ui::theme.textLight);
+        [&current] { current = Screen::Dashboard; }, ui::theme.textDim, ui::theme.textLight);
     back->setPosition(40.f, 360.f); back->setSize(120.f, 40.f);
 }
 
@@ -299,7 +306,7 @@ static void BuildMiniStatement(std::vector<std::unique_ptr<Widget>>& owner, std:
     owner.push_back(std::move(tbl));
 
     auto refresh = add<Button>(owner, tab, regular, "Refresh",
-        [&] {
+        [tblRaw, &loggedIn, &bank] {
             if (loggedIn == 0) return;
             auto tx = bank.transactionsFor(loggedIn);
             std::vector<std::vector<std::string>> rows;
@@ -311,7 +318,7 @@ static void BuildMiniStatement(std::vector<std::unique_ptr<Widget>>& owner, std:
     refresh->setPosition(24.f, 400.f); refresh->setSize(120.f, 36.f);
 
     auto back = add<Button>(owner, tab, regular, "Back",
-        [&] { current = Screen::Dashboard; }, ui::theme.textDim, ui::theme.textLight);
+        [&current] { current = Screen::Dashboard; }, ui::theme.textDim, ui::theme.textLight);
     back->setPosition(160.f, 400.f); back->setSize(120.f, 36.f);
 }
 
@@ -332,7 +339,7 @@ static void BuildChangePinScreen(std::vector<std::unique_ptr<Widget>>& owner, st
     resLabel->setPosition(x, y + gap * 3 + 10.f);
 
     auto doChange = add<Button>(owner, tab, regular, "Change PIN",
-        [&] {
+        [curBox, newBox, confBox, resLabel, &loggedIn, &bank] {
             if (loggedIn == 0) { resLabel->setText("Not logged in."); return; }
             auto c = bank.findByAccountNumber(loggedIn);
             if (!c) { resLabel->setText("Account not found."); return; }
@@ -351,6 +358,6 @@ static void BuildChangePinScreen(std::vector<std::unique_ptr<Widget>>& owner, st
     doChange->setPosition(x + 300.f, y); doChange->setSize(140.f, 40.f);
 
     auto back = add<Button>(owner, tab, regular, "Back",
-        [&] { current = Screen::Dashboard; }, ui::theme.textDim, ui::theme.textLight);
+        [&current] { current = Screen::Dashboard; }, ui::theme.textDim, ui::theme.textLight);
     back->setPosition(40.f, 400.f); back->setSize(120.f, 36.f);
 }
