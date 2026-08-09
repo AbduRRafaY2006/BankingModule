@@ -6,12 +6,9 @@
 #include "Widgets.h"
 
 #include <SFML/Graphics.hpp>
-<<<<<<< HEAD
-=======
 #include <algorithm>
 #include <cmath>
 #include <ctime>
->>>>>>> atm-ui-updates
 #include <memory>
 #include <stdexcept>
 #include <vector>
@@ -23,12 +20,8 @@ using ui::Widget;
 namespace {
 
 constexpr float WIN_W = 760.f;
-<<<<<<< HEAD
-constexpr float WIN_H = 480.f;
-=======
 constexpr float WIN_H = 690.f;
 constexpr float PI = 3.14159265358979f;
->>>>>>> atm-ui-updates
 
 sf::Font loadFontOrThrow(const std::string& file) {
     sf::Font font;
@@ -47,8 +40,6 @@ T* add(std::vector<std::unique_ptr<Widget>>& owner, std::vector<Widget*>& tab, A
     return raw;
 }
 
-<<<<<<< HEAD
-=======
 // ------------------------------------------------------------------------
 // Small self-contained drawing helpers (pure SFML, no dependency on
 // Widgets.h) used to build the rounded cards, dividers, and hand-drawn
@@ -296,51 +287,20 @@ void drawBankBuilding(sf::RenderWindow& window, sf::Vector2f c, float s, sf::Col
     window.draw(plinth);
 }
 
->>>>>>> atm-ui-updates
 } // namespace
 
 void RunLauncherUI() {
     Bank bank("data");
 
-<<<<<<< HEAD
-    sf::RenderWindow window(sf::VideoMode(static_cast<unsigned>(WIN_W), static_cast<unsigned>(WIN_H)),
-                            "Banking Module", sf::Style::Titlebar | sf::Style::Close);
-=======
     sf::ContextSettings settings;
     settings.antialiasingLevel = 8;
     sf::RenderWindow window(sf::VideoMode(static_cast<unsigned>(WIN_W), static_cast<unsigned>(WIN_H)),
                             "Banking Module", sf::Style::Titlebar | sf::Style::Close, settings);
->>>>>>> atm-ui-updates
     window.setFramerateLimit(60);
 
     sf::Font regular = loadFontOrThrow("DejaVuSans.ttf");
     sf::Font bold = loadFontOrThrow("DejaVuSans-Bold.ttf");
 
-<<<<<<< HEAD
-    std::vector<std::unique_ptr<Widget>> owner;
-    std::vector<Widget*> tab;
-
-    auto title = add<Label>(owner, tab, regular, "Banking Module", 24, ui::theme.textDark, true);
-    title->setPosition(60.f, 70.f);
-
-    auto subtitle = add<Label>(owner, tab, regular, "Choose where you want to go", 15, ui::theme.textDim);
-    subtitle->setPosition(60.f, 112.f);
-
-    auto adminBtn = add<Button>(owner, tab, regular, "Admin Panel",
-        [&bank] { RunAdminUI(bank); }, ui::theme.accent, ui::theme.textLight);
-    adminBtn->setPosition(60.f, 170.f);
-    adminBtn->setSize(260.f, 48.f);
-
-    auto atmBtn = add<Button>(owner, tab, regular, "ATM",
-        [&bank] { RunATMUI(bank); }, ui::theme.success, ui::theme.textLight);
-    atmBtn->setPosition(60.f, 232.f);
-    atmBtn->setSize(260.f, 48.f);
-
-    auto exitBtn = add<Button>(owner, tab, regular, "Exit",
-        [&window] { window.close(); }, ui::theme.textDim, ui::theme.textLight);
-    exitBtn->setPosition(60.f, 294.f);
-    exitBtn->setSize(260.f, 44.f);
-=======
     const sf::Color navy(22, 48, 92), navyDark(12, 31, 61), yellow(244, 196, 48);
     const sf::Color mediumBlue(56, 97, 168);
     const sf::Color lightBlueGray(157, 180, 217);
@@ -500,7 +460,6 @@ void RunLauncherUI() {
         auto s = add<Label>(owner, tab, regular, footerItems[i].sub, 10, lightBlueGray);
         s->setPosition(colX + 46.f, footerY + 36.f);
     }
->>>>>>> atm-ui-updates
 
     while (window.isOpen()) {
         sf::Event event{};
@@ -510,21 +469,6 @@ void RunLauncherUI() {
             for (auto* w : tab) w->handleEvent(event, window);
         }
 
-<<<<<<< HEAD
-        window.clear(ui::theme.contentBg);
-
-        sf::Text heading("Banking Module", bold, 28);
-        heading.setFillColor(ui::theme.textDark);
-        heading.setPosition(60.f, 28.f);
-        window.draw(heading);
-
-        sf::RectangleShape card({360.f, 330.f});
-        card.setPosition(40.f, 22.f);
-        card.setFillColor(sf::Color::White);
-        card.setOutlineThickness(1.f);
-        card.setOutlineColor(ui::theme.border);
-        window.draw(card);
-=======
         window.clear(navy);
 
         if (bgLoaded) {
@@ -610,7 +554,6 @@ void RunLauncherUI() {
             timeText.setPosition(colX + 46.f, footerY + 36.f);
             window.draw(timeText);
         }
->>>>>>> atm-ui-updates
 
         for (auto* w : tab) w->draw(window);
 

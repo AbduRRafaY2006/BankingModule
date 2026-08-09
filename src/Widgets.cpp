@@ -2,17 +2,12 @@
 #include <cctype>
 #include <algorithm>
 #include <cmath>
-<<<<<<< HEAD
-=======
 #include <memory>
->>>>>>> atm-ui-updates
 
 namespace ui {
 
 Theme theme{};
 
-<<<<<<< HEAD
-=======
 // ---------------------------------------------------------------------------
 // Sound effects
 // ---------------------------------------------------------------------------
@@ -29,8 +24,6 @@ sf::SoundBuffer& loadBufferOnce(const std::string& filename) {
         if (buf->loadFromFile(base + filename)) { ok = true; break; }
     }
     if (!ok) {
-        // Silent failure: sound is a nice-to-have, never worth crashing the
-        // app over a missing/misplaced wav file.
         static sf::SoundBuffer empty;
         return empty;
     }
@@ -39,8 +32,6 @@ sf::SoundBuffer& loadBufferOnce(const std::string& filename) {
     return *cache.back();
 }
 
-// Round-robin pool of sf::Sound so a rapid second play doesn't cut the
-// first one off (each sf::Sound can only play one instance at a time).
 template <size_t N>
 struct SoundPool {
     sf::Sound sounds[N];
@@ -58,7 +49,6 @@ void playCashSound() {
     pool.play(loadBufferOnce("cash_dispense.wav"));
 }
 
->>>>>>> atm-ui-updates
 namespace {
 constexpr float PI = 3.14159265358979323846f;
 
@@ -81,10 +71,10 @@ sf::ConvexShape makeRoundedRect(sf::Vector2f size, float radius, int cornerSegme
 
     struct Corner { float cx, cy, startDeg; };
     Corner corners[4] = {
-        { size.x - radius, radius,            -90.f },  // top-right
-        { size.x - radius, size.y - radius,      0.f }, // bottom-right
-        { radius,          size.y - radius,     90.f }, // bottom-left
-        { radius,          radius,             180.f }, // top-left
+        { size.x - radius, radius,            -90.f },
+        { size.x - radius, size.y - radius,      0.f },
+        { radius,          size.y - radius,     90.f },
+        { radius,          radius,             180.f },
     };
 
     std::vector<sf::Vector2f> points;
@@ -117,11 +107,184 @@ void drawRoundedRect(sf::RenderWindow& window, sf::FloatRect rect, float radius,
 
 void drawElevatedRoundedRect(sf::RenderWindow& window, sf::FloatRect rect, float radius,
                               sf::Color fill, float elevation) {
-    // Soft shadow: a slightly larger, downward-offset, low-alpha rounded rect.
     sf::Color shadow(20, 24, 40, 55);
     sf::FloatRect shadowRect{rect.left, rect.top + elevation, rect.width, rect.height};
     drawRoundedRect(window, shadowRect, radius, shadow);
     drawRoundedRect(window, rect, radius, fill);
+}
+
+// ---------------------------------------------------------------------------
+// Shared visual language — badge / status pill / nav icon / section card.
+// drawBadge is ported verbatim from ATM.cpp's local helper of the same
+// name, so both modules render the exact same glyph instead of two
+// near-identical copies drifting apart over time.
+// ---------------------------------------------------------------------------
+void drawBadge(sf::RenderWindow& window, sf::Vector2f center, float r, sf::Color color, bool up) {
+    sf::CircleShape c(r);
+    c.setOrigin(r, r);
+    c.setPosition(center);
+    c.setFillColor(sf::Color(color.r, color.g, color.b, 60));
+    c.setOutlineThickness(2.f);
+    c.setOutlineColor(color);
+    window.draw(c);
+
+    sf::ConvexShape arrow;
+    arrow.setPointCount(3);
+    float a = r * 0.5f;
+    if (up) {
+        arrow.setPoint(0, {center.x, center.y - a});
+        arrow.setPoint(1, {center.x - a, center.y + a * 0.6f});
+        arrow.setPoint(2, {center.x + a, center.y + a * 0.6f});
+    } else {
+        arrow.setPoint(0, {center.x, center.y + a});
+        arrow.setPoint(1, {center.x - a, center.y - a * 0.6f});
+        arrow.setPoint(2, {center.x + a, center.y - a * 0.6f});
+    }
+    arrow.setFillColor(color);
+    window.draw(arrow);
+}
+
+sf::Color statusColor(const std::string& status) {
+    if (status == "Active") return theme.success;
+    if (status == "Locked") return theme.danger;
+    return theme.textDim;  // Inactive / anything else
+}
+
+float drawStatusPill(sf::RenderWindow& window, sf::Font& font, sf::Vector2f pos, const std::string& status) {
+    sf::Color c = statusColor(status);
+
+    sf::Text t(status, font, 12);
+    t.setStyle(sf::Text::Bold);
+    float w = t.getLocalBounds().width + 22.f;
+
+    drawRoundedRect(window, {pos.x, pos.y, w, 22.f}, 11.f,
+                     sf::Color(c.r, c.g, c.b, 36), c, 1.2f);
+
+    t.setFillColor(c);
+    t.setPosition(std::round(pos.x + 11.f - t.getLocalBounds().left),
+                  std::round(pos.y + 3.f));
+    window.draw(t);
+
+    return w;
+}
+
+void drawNavIcon(sf::RenderWindow& window, sf::Vector2f center, int tabIndex, sf::Color color) {
+    switch (tabIndex) {
+        case 0: {  // Dashboard — 2x2 grid
+            float s = 3.6f, g = 2.2f;
+            for (int r = 0; r < 2; ++r) {
+                for (int col = 0; col < 2; ++col) {
+                    sf::RectangleShape sq({s, s});
+                    sq.setPosition(center.x - s - g / 2.f + col * (s + g),
+                                   center.y - s - g / 2.f + r * (s + g));
+                    sq.setFillColor(color);
+                    window.draw(sq);
+                }
+            }
+            break;
+        }
+        case 1: {  // New Account — circle with a plus
+            sf::CircleShape c(6.5f);
+            c.setOrigin(6.5f, 6.5f);
+            c.setPosition(center);
+            c.setFillColor(sf::Color::Transparent);
+            c.setOutlineThickness(1.6f);
+            c.setOutlineColor(color);
+            window.draw(c);
+            sf::RectangleShape h({8.f, 1.6f}), v({1.6f, 8.f});
+            h.setOrigin(4.f, 0.8f); h.setPosition(center); h.setFillColor(color);
+            v.setOrigin(0.8f, 4.f); v.setPosition(center); v.setFillColor(color);
+            window.draw(h);
+            window.draw(v);
+            break;
+        }
+        case 2: {  // Accounts — small people/rows glyph (two stacked bars)
+            for (int i = 0; i < 3; ++i) {
+                float wBar = (i == 1) ? 14.f : 10.f;
+                sf::RectangleShape bar({wBar, 2.2f});
+                bar.setOrigin(wBar / 2.f, 1.1f);
+                bar.setPosition(center.x, center.y - 6.f + i * 6.f);
+                bar.setFillColor(color);
+                window.draw(bar);
+            }
+            break;
+        }
+        case 3: {  // Transactions — up/down arrows (mini badge, no ring)
+            sf::ConvexShape up, down;
+            up.setPointCount(3);
+            up.setPoint(0, {center.x - 5.f, center.y + 1.f});
+            up.setPoint(1, {center.x - 1.f, center.y - 6.f});
+            up.setPoint(2, {center.x + 3.f, center.y + 1.f});
+            up.setFillColor(color);
+            window.draw(up);
+
+            down.setPointCount(3);
+            down.setPoint(0, {center.x - 3.f, center.y - 1.f});
+            down.setPoint(1, {center.x + 1.f, center.y + 6.f});
+            down.setPoint(2, {center.x + 5.f, center.y - 1.f});
+            sf::Color dim(color.r, color.g, color.b, 150);
+            down.setFillColor(dim);
+            window.draw(down);
+            break;
+        }
+        case 4: {  // Reset PIN — small padlock
+            sf::RectangleShape body({12.f, 8.f});
+            body.setOrigin(6.f, 4.f);
+            body.setPosition(center.x, center.y + 2.f);
+            body.setFillColor(sf::Color::Transparent);
+            body.setOutlineThickness(1.6f);
+            body.setOutlineColor(color);
+            window.draw(body);
+
+            sf::CircleShape shackle(4.f);
+            shackle.setOrigin(4.f, 4.f);
+            shackle.setPosition(center.x, center.y - 3.f);
+            shackle.setFillColor(sf::Color::Transparent);
+            shackle.setOutlineThickness(1.6f);
+            shackle.setOutlineColor(color);
+            window.draw(shackle);
+            break;
+        }
+        default: {  // Delete & Report — small X in a ring
+            sf::CircleShape c(6.5f);
+            c.setOrigin(6.5f, 6.5f);
+            c.setPosition(center);
+            c.setFillColor(sf::Color::Transparent);
+            c.setOutlineThickness(1.6f);
+            c.setOutlineColor(color);
+            window.draw(c);
+            sf::RectangleShape d1({8.f, 1.6f}), d2({8.f, 1.6f});
+            d1.setOrigin(4.f, 0.8f); d1.setPosition(center); d1.setRotation(45.f); d1.setFillColor(color);
+            d2.setOrigin(4.f, 0.8f); d2.setPosition(center); d2.setRotation(-45.f); d2.setFillColor(color);
+            window.draw(d1);
+            window.draw(d2);
+            break;
+        }
+    }
+}
+
+void drawSectionCard(sf::RenderWindow& window, sf::Font& boldFont, sf::FloatRect rect,
+                      const std::string& title, sf::Color accent) {
+    drawElevatedRoundedRect(window, rect, theme.radius, theme.cardBg, 3.f);
+    drawRoundedRect(window, rect, theme.radius, sf::Color::Transparent, theme.border, 1.f);
+
+    // Small gold/accent tick to the left of the section title, echoing the
+    // ATM's per-screen colored badge instead of a bare bold label.
+    sf::RectangleShape tick({3.5f, 15.f});
+    tick.setPosition(rect.left + 18.f, rect.top + 17.f);
+    tick.setFillColor(accent);
+    window.draw(tick);
+
+    sf::Text t(title, boldFont, 14);
+    t.setStyle(sf::Text::Bold);
+    t.setFillColor(theme.textDark);
+    t.setPosition(rect.left + 30.f, rect.top + 14.f);
+    window.draw(t);
+
+    sf::RectangleShape rule({rect.width - 36.f, 1.f});
+    rule.setPosition(rect.left + 18.f, rect.top + 44.f);
+    rule.setFillColor(theme.border);
+    window.draw(rule);
 }
 
 // ---------------------------------------------------------------------------
@@ -139,7 +302,7 @@ void Label::draw(sf::RenderWindow& window) {
 }
 
 // ---------------------------------------------------------------------------
-// Button — rounded, animated hover, soft shadow
+// Button
 // ---------------------------------------------------------------------------
 Button::Button(sf::Font& font, std::string label, std::function<void()> onClick, sf::Color bg, sf::Color fg)
     : font_(font), label_(std::move(label)), onClick_(std::move(onClick)), bg_(bg), fg_(fg) {}
@@ -153,7 +316,6 @@ void Button::handleEvent(const sf::Event& e, sf::RenderWindow& window) {
 }
 
 void Button::draw(sf::RenderWindow& window) {
-    // Ease hoverT_ toward 0 or 1 each frame -> smooth lift/lighten instead of a hard snap.
     float target = hovered_ ? 1.f : 0.f;
     hoverT_ = lerp(hoverT_, target, 0.25f);
     if (std::fabs(hoverT_ - target) < 0.002f) hoverT_ = target;
@@ -177,7 +339,7 @@ void Button::draw(sf::RenderWindow& window) {
 }
 
 // ---------------------------------------------------------------------------
-// TextBox — rounded, animated focus ring
+// TextBox
 // ---------------------------------------------------------------------------
 TextBox::TextBox(sf::Font& font, std::string placeholder, bool digitsOnly, bool maskChars)
     : font_(font), placeholder_(std::move(placeholder)), digitsOnly_(digitsOnly), maskChars_(maskChars) {}
@@ -191,7 +353,7 @@ void TextBox::handleEvent(const sf::Event& e, sf::RenderWindow& window) {
 
     if (e.type == sf::Event::TextEntered) {
         auto ch = e.text.unicode;
-        if (ch == 8) {  // backspace
+        if (ch == 8) {
             if (!text_.empty()) text_.pop_back();
         } else if (ch == 13 || ch == 9) {
             focused_ = false;
@@ -331,16 +493,25 @@ void Table::handleEvent(const sf::Event& e, sf::RenderWindow& window) {
 
 void Table::draw(sf::RenderWindow& window) {
     constexpr float headerH = 34.f;
-    drawRoundedRect(window, bounds_, theme.radiusSmall, theme.cardBg, theme.border, 1.f);
+
+    // Real elevation (soft shadow) instead of a flat bordered box — this
+    // alone is most of what read as "plain" next to the ATM's cards.
+    drawElevatedRoundedRect(window, bounds_, theme.radiusSmall, theme.cardBg, 3.f);
+    drawRoundedRect(window, bounds_, theme.radiusSmall, sf::Color::Transparent, theme.border, 1.f);
+
+    // Mouse position captured against the *current* (unclipped) view, before
+    // we switch to the scroll-clip view below, so row-hover math stays in
+    // the same coordinate space as the row rects we draw.
+    sf::Vector2f mouse = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
     // Header row
     {
         sf::RectangleShape hdrBg({bounds_.width, headerH});
         hdrBg.setPosition(bounds_.left, bounds_.top);
-        hdrBg.setFillColor(sf::Color(240, 242, 248));
+        hdrBg.setFillColor(sf::Color(241, 243, 249));
         window.draw(hdrBg);
 
-        float cx = bounds_.left + 10.f;
+        float cx = bounds_.left + 14.f;
         for (auto& col : columns_) {
             sf::Text h(col.header, headerFont_, 12);
             h.setStyle(sf::Text::Bold);
@@ -348,15 +519,18 @@ void Table::draw(sf::RenderWindow& window) {
             float tx = cx;
             if (col.alignRight) {
                 auto tb = h.getLocalBounds();
-                tx = cx + col.width - tb.width - 12.f;
+                tx = cx + col.width - tb.width - 16.f;
             }
             h.setPosition(std::round(tx), std::round(bounds_.top + (headerH - 14.f) / 2.f));
             window.draw(h);
             cx += col.width;
         }
-        sf::RectangleShape divider({bounds_.width, 1.f});
-        divider.setPosition(bounds_.left, bounds_.top + headerH);
-        divider.setFillColor(theme.border);
+        // Accent-colored header underline (gold) instead of a plain gray
+        // divider — a small touch that ties the table back to the ATM's
+        // gold-accented chrome.
+        sf::RectangleShape divider({bounds_.width, 2.f});
+        divider.setPosition(bounds_.left, bounds_.top + headerH - 1.f);
+        divider.setFillColor(theme.accent);
         window.draw(divider);
     }
 
@@ -374,11 +548,18 @@ void Table::draw(sf::RenderWindow& window) {
         int idx = scrollOffset_ + i;
         if (idx >= static_cast<int>(rows_.size())) break;
         float y = body.top + i * rowHeight_;
+        sf::FloatRect rowRect{bounds_.left, y, bounds_.width, static_cast<float>(rowHeight_)};
+        bool rowHovered = body.contains(mouse) && rowRect.contains(mouse);
 
         if (idx == selected_) {
             sf::RectangleShape hi({bounds_.width, static_cast<float>(rowHeight_)});
             hi.setPosition(bounds_.left, y);
             hi.setFillColor(theme.rowSelected);
+            window.draw(hi);
+        } else if (rowHovered) {
+            sf::RectangleShape hi({bounds_.width, static_cast<float>(rowHeight_)});
+            hi.setPosition(bounds_.left, y);
+            hi.setFillColor(sf::Color(27, 57, 101, 14));
             window.draw(hi);
         } else if (idx % 2 == 1) {
             sf::RectangleShape stripe({bounds_.width, static_cast<float>(rowHeight_)});
@@ -387,33 +568,52 @@ void Table::draw(sf::RenderWindow& window) {
             window.draw(stripe);
         }
 
-        sf::Color rowColor = theme.textDark;
-        if (idx < static_cast<int>(rowAccents_.size()) && rowAccents_[idx] != sf::Color::Transparent) {
-            rowColor = rowAccents_[idx];
+        // Restrained accent: a 3px bar on the row's left edge rather than
+        // recoloring every cell — reads as a status cue, not a paint job.
+        bool hasAccent = idx < static_cast<int>(rowAccents_.size()) &&
+                          rowAccents_[idx] != sf::Color::Transparent;
+        if (hasAccent) {
+            sf::RectangleShape bar({3.f, static_cast<float>(rowHeight_)});
+            bar.setPosition(bounds_.left, y);
+            bar.setFillColor(rowAccents_[idx]);
+            window.draw(bar);
         }
 
-        float cx = bounds_.left + 10.f;
+        float cx = bounds_.left + 14.f;
         auto& rowCells = rows_[idx];
         for (size_t c = 0; c < columns_.size() && c < rowCells.size(); ++c) {
+            if (columns_[c].statusPill) {
+                drawStatusPill(window, font_, {cx, y + (rowHeight_ - 22.f) / 2.f}, rowCells[c]);
+                cx += columns_[c].width;
+                continue;
+            }
+
             sf::Text t(rowCells[c], font_, 14);
-            t.setFillColor(rowColor);
+            t.setFillColor(theme.textDark);
             float tx = cx;
             if (columns_[c].alignRight) {
                 auto tb = t.getLocalBounds();
-                tx = cx + columns_[c].width - tb.width - 12.f;
+                tx = cx + columns_[c].width - tb.width - 16.f;
             }
             t.setPosition(std::round(tx), std::round(y + (rowHeight_ - 16.f) / 2.f));
             window.draw(t);
             cx += columns_[c].width;
         }
+
+        // Faint row divider — replaces the old "just striping, nothing else"
+        // look with actual row definition, like a real data table.
+        sf::RectangleShape rowLine({bounds_.width, 1.f});
+        rowLine.setPosition(bounds_.left, y + rowHeight_ - 1.f);
+        rowLine.setFillColor(sf::Color(0, 0, 0, 10));
+        window.draw(rowLine);
     }
     window.setView(oldView);
 }
 
 // ---------------------------------------------------------------------------
-<<<<<<< HEAD
-=======
-// CashDispenser
+// CashDispenser — unchanged from the ATM build; kept here only so both
+// translation units link against the same Widgets.cpp. Not used by the
+// admin dashboard.
 // ---------------------------------------------------------------------------
 namespace {
 float easeOutBack(float x) {
@@ -428,8 +628,6 @@ float easeInQuad(float x) {
     return x * x;
 }
 
-// Filled ribbon along a quadratic bezier — used for the smile, since SFML
-// has no built-in stroked-curve primitive.
 void drawQuadraticThickCurve(sf::RenderWindow& window, sf::Vector2f p0, sf::Vector2f c,
                               sf::Vector2f p1, float thickness, sf::Color color, int segments = 14) {
     sf::VertexArray strip(sf::TriangleStrip, static_cast<size_t>(segments + 1) * 2);
@@ -457,13 +655,13 @@ void CashDispenser::trigger() {
 }
 
 void CashDispenser::draw(sf::RenderWindow& window) {
-    constexpr float kDt = 1.f / 60.f;  // matches window.setFramerateLimit(60)
+    constexpr float kDt = 1.f / 60.f;
     constexpr float kProcessingDur = 0.5f;
     constexpr float kDispenseDur = 0.45f;
     constexpr float kRestDur = 3.0f;
     constexpr float kRetractDur = 0.35f;
 
-    idleT_ += kDt;  // blink clock runs regardless of state
+    idleT_ += kDt;
 
     if (state_ != State::Idle) {
         t_ += kDt;
@@ -485,14 +683,11 @@ void CashDispenser::draw(sf::RenderWindow& window) {
         }
     }
 
-    // How far the bill has dropped out of the slot, 0 (hidden) .. 1 (fully out).
     float drop = 0.f;
     if (state_ == State::Dispensing) drop = easeOutBack(t_ / kDispenseDur);
     else if (state_ == State::Resting) drop = 1.f;
     else if (state_ == State::Retracting) drop = 1.f - easeInQuad(t_ / kRetractDur);
 
-    // --- Layout: design coordinates in a fixed 300x260 reference frame,
-    // scaled/centered to whatever size this widget was actually given. ---
     constexpr float designW = 300.f, designH = 260.f;
     float s = std::min(bounds_.width / designW, bounds_.height / designH);
     float offX = bounds_.left + (bounds_.width - designW * s) / 2.f;
@@ -512,7 +707,6 @@ void CashDispenser::draw(sf::RenderWindow& window) {
     const sf::Color billGreen(63, 168, 96);
     const sf::Color billGreenDark(31, 122, 66);
 
-    // Header ribbon
     drawRoundedRect(window, RECT(70.f, 6.f, 160.f, 24.f), 8.f * s, rose);
     {
         sf::Text label("A T M", font_, static_cast<unsigned>(std::max(10.f, 13.f * s)));
@@ -524,13 +718,9 @@ void CashDispenser::draw(sf::RenderWindow& window) {
         window.draw(label);
     }
 
-    // Body
     drawRoundedRect(window, RECT(75.f, 24.f, 150.f, 140.f), 18.f * s, babyPink, rose, 3.f * s);
-
-    // Screen
     drawRoundedRect(window, RECT(85.f, 40.f, 90.f, 44.f), 8.f * s, screenPlum);
 
-    // Eyes (blink is a periodic vertical squish, independent of trigger state)
     float cycle = std::fmod(idleT_, 4.f);
     float blinkScale = 1.f;
     if (cycle > 3.68f) {
@@ -547,10 +737,8 @@ void CashDispenser::draw(sf::RenderWindow& window) {
         window.draw(eye);
     }
 
-    // Smile
     drawQuadraticThickCurve(window, P(98.f, 70.f), P(120.f, 82.f), P(142.f, 70.f), 4.f * s, sf::Color::White);
 
-    // Keypad
     drawRoundedRect(window, RECT(90.f, 92.f, 70.f, 40.f), 6.f * s, keyPink, rose, 2.f * s);
     for (int row = 0; row < 2; ++row) {
         for (int col = 0; col < 3; ++col) {
@@ -561,11 +749,8 @@ void CashDispenser::draw(sf::RenderWindow& window) {
         }
     }
 
-    // Slot
     drawRoundedRect(window, RECT(100.f, 150.f, 50.f, 10.f), 3.f * s, slotColor);
 
-    // --- Bill: clipped to the region below the slot so it appears to hang
-    // out from underneath it, sliding down as `drop` goes 0 -> 1. ---
     {
         sf::View oldView = window.getView();
         sf::Vector2u winSize = window.getSize();
@@ -575,8 +760,8 @@ void CashDispenser::draw(sf::RenderWindow& window) {
                                             clipRect.width / winSize.x, clipRect.height / winSize.y));
         window.setView(clipView);
 
-        float billTopHidden = 80.f;   // fully tucked position (behind the slot, with margin for the rotation overhang)
-        float billTopShown = 160.f;   // fully hanging-out position
+        float billTopHidden = 80.f;
+        float billTopShown = 160.f;
         float billY = billTopHidden + (billTopShown - billTopHidden) * drop;
 
         sf::RectangleShape bill(SZ(50.f, 72.f));
@@ -608,7 +793,6 @@ void CashDispenser::draw(sf::RenderWindow& window) {
 }
 
 // ---------------------------------------------------------------------------
->>>>>>> atm-ui-updates
 // Static drawing helpers
 // ---------------------------------------------------------------------------
 void drawPanelBackground(sf::RenderWindow& window, sf::FloatRect rect, sf::Color fill, sf::Color border) {
@@ -616,20 +800,28 @@ void drawPanelBackground(sf::RenderWindow& window, sf::FloatRect rect, sf::Color
 }
 
 void drawCard(sf::RenderWindow& window, sf::Font& font, sf::FloatRect rect,
-              const std::string& title, const std::string& value, sf::Color valueColor) {
-    drawElevatedRoundedRect(window, rect, theme.radius, theme.cardBg, 3.f);
+              const std::string& title, const std::string& value, sf::Color valueColor, bool trendUp) {
+    drawElevatedRoundedRect(window, rect, theme.radius, theme.cardBg, 4.f);
 
-    sf::Text titleText(title, font, 13);
+    // Badge instead of a bare label — the same glyph used on the ATM screen
+    drawBadge(window, {rect.left + 30.f, rect.top + 28.f}, 13.f, valueColor, trendUp);
+
+    sf::Text titleText(title, font, 12);
     titleText.setFillColor(theme.textDim);
     titleText.setStyle(sf::Text::Bold);
-    titleText.setPosition(rect.left + 16.f, rect.top + 14.f);
+    titleText.setPosition(rect.left + 54.f, rect.top + 20.f);
     window.draw(titleText);
 
-    sf::Text valueText(value, font, 28);
+    sf::Text valueText(value, font, 30);
     valueText.setStyle(sf::Text::Bold);
-    valueText.setFillColor(valueColor);
-    valueText.setPosition(rect.left + 16.f, rect.top + rect.height / 2.f + 2.f);
+    valueText.setFillColor(theme.textDark);
+    valueText.setPosition(rect.left + 18.f, rect.top + rect.height / 2.f + 6.f);
     window.draw(valueText);
+
+    sf::RectangleShape bar({rect.width - 36.f, 3.f});
+    bar.setPosition(rect.left + 18.f, rect.top + rect.height - 16.f);
+    bar.setFillColor(valueColor);
+    window.draw(bar);
 }
 
 }  // namespace ui

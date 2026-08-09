@@ -1,9 +1,6 @@
 #pragma once
 #include <SFML/Graphics.hpp>
-<<<<<<< HEAD
-=======
 #include <SFML/Audio.hpp>
->>>>>>> atm-ui-updates
 #include <string>
 #include <vector>
 #include <functional>
@@ -11,72 +8,68 @@
 // ============================================================================
 // Widgets.h
 //
-// CHANGES vs the previous version:
-//   - Theme gained a `radius` field (corner radius used everywhere) and an
-//     `accentHover` color for consistent hover states.
-//   - Added drawRoundedRect() / makeRoundedRect() — SFML has no built-in
-//     rounded-rect shape, so this builds one out of arced corner points.
-//   - Added the Table widget: a proper column-aligned, header-row table with
-//     row striping and selection, used anywhere we used to just print a
-//     formatted string into a ListBox (Accounts, Transactions, Reports).
-//   - Button / TextBox now carry small animation state (hoverT_ / focusT_)
-//     so hover/focus transitions are smooth instead of instant.
+// REDESIGN NOTE (this pass):
+//   Theme colors are now pulled directly from the ATM module's palette
+//   (navy body / gold accent / green success / warm-orange warning) so the
+//   admin dashboard and the ATM screen read as one product instead of two.
+//   Added: drawBadge() (the ATM's circular up/down badge, now shared),
+//   drawStatusPill(), drawNavIcon(), drawSectionCard() — all small,
+//   composable helpers used to give every admin tab the same "designed"
+//   quality the ATM screen has, instead of flat boxes of text.
+//   TableColumn gained `statusPill` — when set, that column renders as a
+//   colored pill (Active/Inactive/Locked) instead of plain text.
+//   Table also renders a thin colored accent bar on the left edge of a row
+//   when rowAccents_[i] is non-transparent, instead of recoloring the
+//   entire row's text (restrained accent, not a wall of color).
 //
-// NOTE: This header is a best-effort reconstruction of the original
-// Widgets.h based on how Widgets.cpp / UI.cpp use it. If your real header
-// has extra members other files depend on, port those over — the public
-// API surface here (constructors, setPosition/setSize/bounds, value(),
-// setValue(), clear(), selectedIndex(), setItems()) matches what UI.cpp
-// already calls, so it should drop in cleanly.
+// Everything else (constructors, setPosition/setSize/bounds, value(),
+// setValue(), clear(), selectedIndex(), setItems()) is unchanged, so
+// ATM.cpp / UI.cpp keep compiling against the same public surface.
 // ============================================================================
 
 namespace ui {
 
 struct Theme {
-    // Frame
-    sf::Color sidebarBg       {  38,  52, 110 };
-    sf::Color sidebarSelected {  62,  82, 158 };
-    sf::Color contentBg       { 244, 246, 250 };
+    // Frame — matches ATM_BODY_DARK / ATM_BODY / ATM_BG
+    sf::Color sidebarBg       {  14,  36,  70 };
+    sf::Color sidebarSelected {  27,  57, 101 };
+    sf::Color contentBg       { 245, 245, 245 };
     sf::Color cardBg          { 255, 255, 255 };
     sf::Color border          { 226, 230, 238 };
 
     // Inputs
-    sf::Color inputBg         { 255, 255, 255 };
-    sf::Color inputFocused    {  86, 120, 236 };
+    sf::Color inputBg         { 248, 249, 252 };
+    sf::Color inputFocused    {  27,  57, 101 };
 
     // Text
-    sf::Color textDark        {  28,  32,  44 };
-    sf::Color textDim         { 133, 141, 158 };
-    sf::Color textLight       { 255, 255, 255 };
+    sf::Color textDark        {  27,  35,  55 };
+    sf::Color textDim         { 130, 140, 158 };
+    sf::Color textLight       { 235, 240, 245 };
 
-    // Accents / status
-    sf::Color accent          {  64, 108, 238 };
-    sf::Color accentHover     {  92, 132, 245 };
-    sf::Color success         {  39, 174,  96 };
-    sf::Color danger          { 224,  69,  69 };
-    sf::Color warning         { 232, 160,  40 };
+    // Accents / status — matches ATM_ACCENT / ATM_SUCCESS / ATM_DANGER
+    sf::Color accent          { 250, 196,  45 };   // gold
+    sf::Color accentHover     { 255, 214,  90 };
+    sf::Color accentDim       { 190, 145,  28 };
+    sf::Color success         {  46, 204, 113 };
+    sf::Color danger          { 231,  76,  60 };
+    sf::Color warning         { 230, 160,  60 };
 
     // Table striping
-    sf::Color rowAlt          { 247, 249, 252 };
-    sf::Color rowSelected     { 222, 232, 253 };
+    sf::Color rowAlt          { 248, 249, 252 };
+    sf::Color rowSelected     { 250, 196,  45, 35 };
 
-    float radius              { 10.f };   // default corner radius for panels/buttons
-    float radiusSmall         {  6.f };   // corner radius for inputs / rows
+    float radius              { 14.f };
+    float radiusSmall         { 10.f };
 };
 
 extern Theme theme;
 
 // ---------------------------------------------------------------------------
-<<<<<<< HEAD
-=======
-// Sound effects — lazily loaded from assets/cash_dispense.wav on first use.
-// Keeps a small round-robin pool of sf::Sound instances so rapid repeated
-// plays don't cut each other off.
+// Sound effects
 // ---------------------------------------------------------------------------
 void playCashSound();
 
 // ---------------------------------------------------------------------------
->>>>>>> atm-ui-updates
 // Rounded-rect drawing helpers
 // ---------------------------------------------------------------------------
 sf::ConvexShape makeRoundedRect(sf::Vector2f size, float radius, int cornerSegments = 8);
@@ -85,9 +78,35 @@ void drawRoundedRect(sf::RenderWindow& window, sf::FloatRect rect, float radius,
                       sf::Color fill, sf::Color outline = sf::Color::Transparent,
                       float outlineThickness = 0.f);
 
-// Soft drop shadow + rounded fill, used for cards/buttons that should "lift".
 void drawElevatedRoundedRect(sf::RenderWindow& window, sf::FloatRect rect, float radius,
                               sf::Color fill, float elevation = 2.f);
+
+// ---------------------------------------------------------------------------
+// Shared visual language (ported from ATM.cpp so both modules use the
+// same drawing code instead of two copies drifting apart)
+// ---------------------------------------------------------------------------
+
+// Small circular badge with an up/down arrow — the ATM's per-screen icon,
+// reused here on dashboard cards and table rows.
+void drawBadge(sf::RenderWindow& window, sf::Vector2f center, float r, sf::Color color, bool up);
+
+// Maps a customer status string to its theme color. Shared by Table's
+// status-pill rendering and any code (accDetail, etc.) that needs the
+// same color without duplicating the if/else chain.
+sf::Color statusColor(const std::string& status);
+
+// Rounded pill with colored outline + tinted fill, sized to its text.
+// Returns the pill's width so callers can lay out things after it.
+float drawStatusPill(sf::RenderWindow& window, sf::Font& font, sf::Vector2f pos, const std::string& status);
+
+// Cheap glyph-style icon for sidebar nav items — no image assets required.
+void drawNavIcon(sf::RenderWindow& window, sf::Vector2f center, int tabIndex, sf::Color color);
+
+// A titled card panel: rounded background + small gold accent tick + label.
+// Use to visually group a cluster of fields/buttons instead of leaving them
+// floating on the bare content background.
+void drawSectionCard(sf::RenderWindow& window, sf::Font& boldFont, sf::FloatRect rect,
+                      const std::string& title, sf::Color accent);
 
 // ---------------------------------------------------------------------------
 // Base widget
@@ -144,7 +163,7 @@ private:
     std::function<void()> onClick_;
     sf::Color bg_, fg_;
     bool hovered_ = false;
-    float hoverT_ = 0.f;   // 0..1, eased toward hovered_ each frame
+    float hoverT_ = 0.f;
 };
 
 // ---------------------------------------------------------------------------
@@ -174,7 +193,7 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// ListBox (kept for anything that's a plain single-column list)
+// ListBox
 // ---------------------------------------------------------------------------
 class ListBox : public Widget {
 public:
@@ -195,13 +214,13 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// Table — the real replacement for hand-formatted text rows.
-// Use this anywhere you were building a "col1 | col2 | col3" string.
+// Table
 // ---------------------------------------------------------------------------
 struct TableColumn {
     std::string header;
-    float width;            // px
+    float width;
     bool alignRight = false;
+    bool statusPill = false;   // render this column's cells as a status pill
 };
 
 class Table : public Widget {
@@ -209,9 +228,6 @@ public:
     Table(sf::Font& font, sf::Font& headerFont,
           std::vector<TableColumn> columns, unsigned rowHeight = 34);
 
-    // Each row is a vector of cell strings, one per column.
-    // Optional per-row accent color (e.g. status pill color); pass
-    // sf::Color::Transparent to use default text color.
     void setRows(std::vector<std::vector<std::string>> rows,
                  std::vector<sf::Color> rowAccents = {});
 
@@ -234,17 +250,7 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-<<<<<<< HEAD
-=======
-// CashDispenser — an illustrated ATM character (rounded body, blinking
-// smiley screen, keypad) with a bill that hangs out of a slot and retracts
-// automatically. Purely visual; advances its own timers inside draw() the
-// same way Button/TextBox ease their hover/focus/cursor state each frame.
-//
-// Usage: call trigger() once a withdrawal succeeds. The widget then runs
-// through Processing -> Dispensing -> Resting -> Retracting -> Idle on its
-// own; nothing else needs to poll or update it. The face keeps blinking
-// continuously regardless of state.
+// CashDispenser (unchanged — ATM-only widget, kept for interface parity)
 // ---------------------------------------------------------------------------
 class CashDispenser : public Widget {
 public:
@@ -258,17 +264,18 @@ private:
 
     sf::Font& font_;
     State state_ = State::Idle;
-    float t_ = 0.f;        // seconds elapsed in current state
-    float idleT_ = 0.f;    // free-running clock, drives the blink regardless of state
+    float t_ = 0.f;
+    float idleT_ = 0.f;
 };
 
 // ---------------------------------------------------------------------------
->>>>>>> atm-ui-updates
 // Static drawing helpers
 // ---------------------------------------------------------------------------
 void drawPanelBackground(sf::RenderWindow& window, sf::FloatRect rect, sf::Color fill, sf::Color border);
 
+// trendUp picks the badge arrow direction next to the metric title.
 void drawCard(sf::RenderWindow& window, sf::Font& font, sf::FloatRect rect,
-              const std::string& title, const std::string& value, sf::Color valueColor);
+              const std::string& title, const std::string& value, sf::Color valueColor,
+              bool trendUp = true);
 
 }  // namespace ui
