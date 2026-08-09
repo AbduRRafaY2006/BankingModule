@@ -1,5 +1,9 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+<<<<<<< HEAD
+=======
+#include <SFML/Audio.hpp>
+>>>>>>> atm-ui-updates
 #include <string>
 #include <vector>
 #include <functional>
@@ -63,6 +67,16 @@ struct Theme {
 extern Theme theme;
 
 // ---------------------------------------------------------------------------
+<<<<<<< HEAD
+=======
+// Sound effects — lazily loaded from assets/cash_dispense.wav on first use.
+// Keeps a small round-robin pool of sf::Sound instances so rapid repeated
+// plays don't cut each other off.
+// ---------------------------------------------------------------------------
+void playCashSound();
+
+// ---------------------------------------------------------------------------
+>>>>>>> atm-ui-updates
 // Rounded-rect drawing helpers
 // ---------------------------------------------------------------------------
 sf::ConvexShape makeRoundedRect(sf::Vector2f size, float radius, int cornerSegments = 8);
@@ -220,6 +234,36 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+<<<<<<< HEAD
+=======
+// CashDispenser — an illustrated ATM character (rounded body, blinking
+// smiley screen, keypad) with a bill that hangs out of a slot and retracts
+// automatically. Purely visual; advances its own timers inside draw() the
+// same way Button/TextBox ease their hover/focus/cursor state each frame.
+//
+// Usage: call trigger() once a withdrawal succeeds. The widget then runs
+// through Processing -> Dispensing -> Resting -> Retracting -> Idle on its
+// own; nothing else needs to poll or update it. The face keeps blinking
+// continuously regardless of state.
+// ---------------------------------------------------------------------------
+class CashDispenser : public Widget {
+public:
+    explicit CashDispenser(sf::Font& font);
+
+    void trigger();
+    void draw(sf::RenderWindow& window) override;
+
+private:
+    enum class State { Idle, Processing, Dispensing, Resting, Retracting };
+
+    sf::Font& font_;
+    State state_ = State::Idle;
+    float t_ = 0.f;        // seconds elapsed in current state
+    float idleT_ = 0.f;    // free-running clock, drives the blink regardless of state
+};
+
+// ---------------------------------------------------------------------------
+>>>>>>> atm-ui-updates
 // Static drawing helpers
 // ---------------------------------------------------------------------------
 void drawPanelBackground(sf::RenderWindow& window, sf::FloatRect rect, sf::Color fill, sf::Color border);
