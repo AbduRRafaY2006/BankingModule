@@ -14,6 +14,8 @@ add_executable(banking_admin_sfml
     src/Widgets.cpp
     src/UI.cpp
     src/ATM.cpp
+    src/AdminAuth.cpp
+    src/AdminLogin.cpp
 )
 
 target_include_directories(banking_admin_sfml PRIVATE src)

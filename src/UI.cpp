@@ -17,23 +17,27 @@ using ui::Widget;
 
 namespace {
 
-// ---------------------------------------------------------------------------
-// Layout constants
-// ---------------------------------------------------------------------------
+
 constexpr float WIN_W = 1200.f;
 constexpr float WIN_H = 740.f;
 constexpr float SIDEBAR_W = 240.f;
 
-constexpr float PAGE_PAD = 32.f;
-constexpr float PAGE_TOP = 78.f;
+constexpr float PAGE_PAD = 32.f;      // left margin of the content area
+constexpr float PAGE_TOP = 78.f;      // where content starts, under the screen title
 constexpr float FIELD_W = 400.f;
 constexpr float FIELD_H = 40.f;
-constexpr float FIELD_GAP = 58.f;
+constexpr float FIELD_GAP = 58.f;     // vertical distance between stacked fields
 
 std::string money(double v) {
     std::ostringstream oss;
     oss << std::fixed << std::setprecision(2) << v;
     return oss.str();
+}
+
+sf::Color statusColor(const std::string& s) {
+    if (s == "Active") return ui::theme.success;
+    if (s == "Locked") return ui::theme.danger;
+    return ui::theme.textDim;
 }
 
 sf::Font loadFontOrThrow(const std::string& file) {
@@ -56,39 +60,33 @@ T* add(std::vector<std::unique_ptr<Widget>>& owner, std::vector<Widget*>& tab, A
 }  // namespace
 
 void RunAdminUI(Bank& bank) {
-    sf::ContextSettings settings;
-    settings.antialiasingLevel = 8;
     sf::RenderWindow window(sf::VideoMode(static_cast<unsigned>(WIN_W), static_cast<unsigned>(WIN_H)),
-                             "Admin Dashboard", sf::Style::Titlebar | sf::Style::Close, settings);
+                             "Admin Dashboard", sf::Style::Titlebar | sf::Style::Close);
     window.setFramerateLimit(60);
 
-    // Same font-swap note as before, now actually acted on: DejaVu is the
-    // single biggest reason the admin screen read as "not the same app" as
-    // the ATM. Drop InterRegular.ttf / InterBold.ttf into assets/ (free,
-    // Google Fonts). Falls back to DejaVu automatically if they're missing
-    // so this still compiles and runs without the new font files.
-    sf::Font regular, bold;
-    bool haveInter = true;
-    try { regular = loadFontOrThrow("D:\\SummerSem\\FOCP\\Project\\banking_admin_sfml\\assets\\Inter28ptRegular.ttf.ttf"); }
-    catch (...) { haveInter = false; regular = loadFontOrThrow("DejaVuSans.ttf"); }
-    try { bold = loadFontOrThrow("D:\\SummerSem\\FOCP\\Project\\banking_admin_sfml\\assets\\Inter28ptBold.ttf.ttf"); }
-    catch (...) { bold = loadFontOrThrow("DejaVuSans-Bold.ttf"); }
-    (void)haveInter;
+    // NOTE ON FONTS: DejaVu Sans is what's giving this the "not like a real
+    // website" look — it's a solid open font but it's not what any modern
+    // product UI actually ships. Drop a nicer variable/static font (e.g.
+    // "Inter", "Poppins", or "Manrope" — all free, all on Google Fonts) into
+    // assets/ as InterRegular.ttf / InterBold.ttf and just change the two
+    // filenames below. No other code needs to change.
+    sf::Font regular = loadFontOrThrow("DejaVuSans.ttf");
+    sf::Font bold = loadFontOrThrow("DejaVuSans-Bold.ttf");
 
     std::vector<std::unique_ptr<Widget>> owner;
     int currentTab = 0;
     std::vector<std::string> tabNames = {"Dashboard", "New Account", "Accounts", "Transactions", "Reset PIN", "Delete & Report"};
 
     // ------------------------------------------------------------------
-    // Sidebar navigation
+    // Sidebar navigation — rounded selection pill + hover highlight
     // ------------------------------------------------------------------
     std::vector<std::unique_ptr<Widget>> sidebarOwner;
     std::vector<Button*> navButtons;
     for (size_t i = 0; i < tabNames.size(); ++i) {
-        auto btn = std::make_unique<Button>(regular, "", [&currentTab, i] { currentTab = static_cast<int>(i); },
-                                             sf::Color::Transparent, ui::theme.textLight);
-        btn->setPosition(14.f, 108.f + i * 50.f);
-        btn->setSize(SIDEBAR_W - 28.f, 42.f);
+        auto btn = std::make_unique<Button>(regular, tabNames[i], [&currentTab, i] { currentTab = static_cast<int>(i); },
+                                             ui::theme.sidebarBg, ui::theme.textLight);
+        btn->setPosition(16.f, 96.f + i * 48.f);
+        btn->setSize(SIDEBAR_W - 32.f, 40.f);
         navButtons.push_back(btn.get());
         sidebarOwner.push_back(std::move(btn));
     }
@@ -97,34 +95,13 @@ void RunAdminUI(Bank& bank) {
     // TAB 0: Dashboard
     // ==================================================================
     std::vector<Widget*> tabDashboard;
-    // Quick-action shortcuts under the metric cards — jump straight into
-    // the task instead of only ever landing on the summary.
-    struct QuickAction { std::string label; int targetTab; sf::Color color; };
-    std::vector<QuickAction> quickActions = {
-        { "+ New Account", 1, ui::theme.accent },
-        { "Reset a PIN",   4, ui::theme.warning },
-        { "View Accounts", 2, sf::Color(90, 160, 250) },
-    };
-    {
-        float qx = SIDEBAR_W + PAGE_PAD, qy = 470.f;
-        for (size_t i = 0; i < quickActions.size(); ++i) {
-            auto& qa = quickActions[i];
-            auto* btn = add<Button>(owner, tabDashboard, regular, qa.label,
-                [&currentTab, tab = qa.targetTab] { currentTab = tab; },
-                qa.color, i == 0 ? ui::theme.textDark : ui::theme.textLight);
-            btn->setPosition(qx + i * 236.f, qy);
-            btn->setSize(220.f, 46.f);
-        }
-    }
 
     // ==================================================================
     // TAB 1: New Account
     // ==================================================================
     std::vector<Widget*> tabNewAccount;
-    float x0 = SIDEBAR_W + PAGE_PAD + 24.f;
-    float y = PAGE_TOP + 40.f;
-    const float cardLeft = SIDEBAR_W + PAGE_PAD;
-    const float cardW = 470.f;
+    float x0 = SIDEBAR_W + PAGE_PAD;
+    float y = PAGE_TOP;
 
     auto naName = add<TextBox>(owner, tabNewAccount, regular, "Full name");
     naName->setPosition(x0, y); naName->setSize(FIELD_W, FIELD_H);
@@ -140,7 +117,7 @@ void RunAdminUI(Bank& bank) {
     naPin->setPosition(x0, y + FIELD_GAP * 5); naPin->setSize(FIELD_W, FIELD_H);
 
     auto naMsg = add<Label>(owner, tabNewAccount, regular, "", 14, ui::theme.success);
-    naMsg->setPosition(x0, y + FIELD_GAP * 6 + 52.f);
+    naMsg->setPosition(x0, y + FIELD_GAP * 6 + 50.f);
 
     auto naCreateBtn = add<Button>(owner, tabNewAccount, regular, "Create Account",
         [&bank, naName, naCnic, naPhone, naAddress, naDeposit, naPin, naMsg] {
@@ -156,9 +133,9 @@ void RunAdminUI(Bank& bank) {
                 naAddress->clear(); naDeposit->clear(); naPin->clear();
             }
         },
-        ui::theme.accent, ui::theme.textDark);
+        ui::theme.accent, ui::theme.textLight);
     naCreateBtn->setPosition(x0, y + FIELD_GAP * 6);
-    naCreateBtn->setSize(200.f, 44.f);
+    naCreateBtn->setSize(190.f, 42.f);
 
     // ==================================================================
     // TAB 2: Accounts (search / list / update / status / deposit-withdraw)
@@ -172,54 +149,52 @@ void RunAdminUI(Bank& bank) {
 
     float ax = SIDEBAR_W + PAGE_PAD;
     auto accSearchBox = add<TextBox>(owner, tabAccounts, regular, "Search by name (blank = all)");
-    accSearchBox->setPosition(ax + 18.f, 92.f); accSearchBox->setSize(280.f, 38.f);
+    accSearchBox->setPosition(ax, 68.f); accSearchBox->setSize(300.f, 38.f);
 
-    // STATUS column now renders as a colored pill (Table has native support
-    // for this now) instead of plain black text.
     auto accTable = add<Table>(owner, tabAccounts, regular, bold,
         std::vector<TableColumn>{
-            { "ACCOUNT #", 100.f, false, false },
-            { "NAME",      170.f, false, false },
-            { "STATUS",    110.f, false, true  },
-            { "BALANCE",   110.f, true,  false },
-        }, 36);
-    accTable->setPosition(ax + 18.f, 142.f);
-    accTable->setSize(490.f, 220.f);
+            { "ACCOUNT #", 100.f, false },
+            { "NAME",      190.f, false },
+            { "STATUS",    100.f, false },
+            { "BALANCE",   110.f, true  },
+        }, 34);
+    accTable->setPosition(ax, 116.f);
+    accTable->setSize(500.f, 200.f);
 
     auto rebuildAccountList = [accountsData, accTable, buildAccountRow] {
         std::vector<std::vector<std::string>> rows;
         std::vector<sf::Color> accents;
         for (auto& c : *accountsData) {
             rows.push_back(buildAccountRow(c));
-            accents.push_back(ui::statusColor(c.status));  // thin left accent bar per row
+            accents.push_back(sf::Color::Transparent);
         }
         accTable->setRows(rows, accents);
     };
     rebuildAccountList();
 
-    auto accSearchBtn = add<Button>(owner, tabAccounts, regular, "Search",
+    auto accSearchBtn = add<Button>(owner, tabAccounts, regular, "Search / Refresh",
         [&bank, accSearchBox, accountsData, rebuildAccountList] {
             if (accSearchBox->value().empty()) *accountsData = bank.allAccounts();
             else *accountsData = bank.searchByName(accSearchBox->value());
             rebuildAccountList();
         },
-        ui::theme.accent, ui::theme.textDark);
-    accSearchBtn->setPosition(ax + 306.f, 92.f); accSearchBtn->setSize(130.f, 38.f);
+        ui::theme.accent, ui::theme.textLight);
+    accSearchBtn->setPosition(ax + 316.f, 68.f); accSearchBtn->setSize(160.f, 38.f);
 
     auto accDetail = add<Label>(owner, tabAccounts, regular, "Select an account above.", 14, ui::theme.textDark);
-    accDetail->setPosition(ax + 552.f, 100.f);
+    accDetail->setPosition(ax + 540.f, 78.f);
 
-    float ex = ax + 18.f;
-    float ey = 410.f;
+    float ex = ax;
+    float ey = 350.f;
     auto accEditName = add<TextBox>(owner, tabAccounts, regular, "New name (blank = unchanged)");
-    accEditName->setPosition(ex, ey); accEditName->setSize(300.f, 36.f);
+    accEditName->setPosition(ex, ey); accEditName->setSize(320.f, 36.f);
     auto accEditPhone = add<TextBox>(owner, tabAccounts, regular, "New phone (blank = unchanged)");
-    accEditPhone->setPosition(ex, ey + 48.f); accEditPhone->setSize(300.f, 36.f);
+    accEditPhone->setPosition(ex, ey + 48.f); accEditPhone->setSize(320.f, 36.f);
     auto accEditAddress = add<TextBox>(owner, tabAccounts, regular, "New address (blank = unchanged)");
-    accEditAddress->setPosition(ex, ey + 96.f); accEditAddress->setSize(300.f, 36.f);
+    accEditAddress->setPosition(ex, ey + 96.f); accEditAddress->setSize(320.f, 36.f);
 
     auto accMsg = add<Label>(owner, tabAccounts, regular, "", 13, ui::theme.success);
-    accMsg->setPosition(ex, ey + 258.f);
+    accMsg->setPosition(ex, ey + 260.f);
 
     auto currentSelected = [accountsData, accTable]() -> Customer* {
         int idx = accTable->selectedIndex();
@@ -227,7 +202,7 @@ void RunAdminUI(Bank& bank) {
         return &(*accountsData)[idx];
     };
 
-    auto accLoadBtn = add<Button>(owner, tabAccounts, regular, "Load Into Editor",
+    auto accLoadBtn = add<Button>(owner, tabAccounts, regular, "Load Selected Into Editor",
         [currentSelected, accEditName, accEditPhone, accEditAddress, accMsg] {
             auto* c = currentSelected();
             if (!c) { accMsg->setText("No account selected."); return; }
@@ -236,8 +211,8 @@ void RunAdminUI(Bank& bank) {
             accEditAddress->setValue(c->address);
             accMsg->setText("Loaded account " + std::to_string(c->accountNumber) + " into editor.");
         },
-        ui::theme.warning, ui::theme.textDark);
-    accLoadBtn->setPosition(ax + 552.f, 268.f); accLoadBtn->setSize(220.f, 38.f);
+        ui::theme.warning, sf::Color::Black);
+    accLoadBtn->setPosition(ax + 540.f, 250.f); accLoadBtn->setSize(240.f, 38.f);
 
     auto refreshAfterMutation = [&bank, accountsData, rebuildAccountList] {
         *accountsData = bank.allAccounts();
@@ -252,8 +227,8 @@ void RunAdminUI(Bank& bank) {
             accMsg->setText(res.message);
             if (res.ok) refreshAfterMutation();
         },
-        ui::theme.accent, ui::theme.textDark);
-    accSaveBtn->setPosition(ex, ey + 144.f); accSaveBtn->setSize(150.f, 38.f);
+        ui::theme.accent, ui::theme.textLight);
+    accSaveBtn->setPosition(ex, ey + 144.f); accSaveBtn->setSize(160.f, 38.f);
 
     auto makeStatusBtn = [&](const std::string& label, const std::string& status, sf::Color color) {
         return add<Button>(owner, tabAccounts, regular, label,
@@ -267,14 +242,14 @@ void RunAdminUI(Bank& bank) {
             color, ui::theme.textLight);
     };
     auto accActivateBtn = makeStatusBtn("Activate", "Active", ui::theme.success);
-    accActivateBtn->setPosition(ex, ey + 196.f); accActivateBtn->setSize(94.f, 36.f);
+    accActivateBtn->setPosition(ex, ey + 196.f); accActivateBtn->setSize(100.f, 36.f);
     auto accDeactivateBtn = makeStatusBtn("Deactivate", "Inactive", ui::theme.textDim);
-    accDeactivateBtn->setPosition(ex + 104.f, ey + 196.f); accDeactivateBtn->setSize(104.f, 36.f);
+    accDeactivateBtn->setPosition(ex + 112.f, ey + 196.f); accDeactivateBtn->setSize(112.f, 36.f);
     auto accLockBtn = makeStatusBtn("Lock", "Locked", ui::theme.danger);
-    accLockBtn->setPosition(ex + 218.f, ey + 196.f); accLockBtn->setSize(78.f, 36.f);
+    accLockBtn->setPosition(ex + 236.f, ey + 196.f); accLockBtn->setSize(84.f, 36.f);
 
     auto accDepositAmt = add<TextBox>(owner, tabAccounts, regular, "Amount");
-    accDepositAmt->setPosition(ax + 552.f, ey); accDepositAmt->setSize(140.f, 36.f);
+    accDepositAmt->setPosition(ax + 540.f, ey); accDepositAmt->setSize(150.f, 36.f);
     auto accDepositBtn = add<Button>(owner, tabAccounts, regular, "Deposit",
         [&bank, currentSelected, accDepositAmt, accMsg, refreshAfterMutation] {
             auto* c = currentSelected();
@@ -286,10 +261,10 @@ void RunAdminUI(Bank& bank) {
             if (res.ok) { refreshAfterMutation(); accDepositAmt->clear(); }
         },
         ui::theme.success, ui::theme.textLight);
-    accDepositBtn->setPosition(ax + 700.f, ey); accDepositBtn->setSize(110.f, 36.f);
+    accDepositBtn->setPosition(ax + 700.f, ey); accDepositBtn->setSize(120.f, 36.f);
 
     auto accWithdrawAmt = add<TextBox>(owner, tabAccounts, regular, "Amount");
-    accWithdrawAmt->setPosition(ax + 552.f, ey + 48.f); accWithdrawAmt->setSize(140.f, 36.f);
+    accWithdrawAmt->setPosition(ax + 540.f, ey + 48.f); accWithdrawAmt->setSize(150.f, 36.f);
     auto accWithdrawBtn = add<Button>(owner, tabAccounts, regular, "Withdraw",
         [&bank, currentSelected, accWithdrawAmt, accMsg, refreshAfterMutation] {
             auto* c = currentSelected();
@@ -300,8 +275,8 @@ void RunAdminUI(Bank& bank) {
             accMsg->setText(res.message);
             if (res.ok) { refreshAfterMutation(); accWithdrawAmt->clear(); }
         },
-        ui::theme.warning, ui::theme.textDark);
-    accWithdrawBtn->setPosition(ax + 700.f, ey + 48.f); accWithdrawBtn->setSize(110.f, 36.f);
+        ui::theme.danger, ui::theme.textLight);
+    accWithdrawBtn->setPosition(ax + 700.f, ey + 48.f); accWithdrawBtn->setSize(120.f, 36.f);
 
     // ==================================================================
     // TAB 3: Transactions
@@ -311,34 +286,28 @@ void RunAdminUI(Bank& bank) {
 
     auto txTable = add<Table>(owner, tabTransactions, regular, bold,
         std::vector<TableColumn>{
-            { "TIMESTAMP",  190.f, false, false },
-            { "ACCOUNT #",  110.f, false, false },
-            { "TYPE",       150.f, false, false },
-            { "AMOUNT",     130.f, true,  false },
-            { "BALANCE",    130.f, true,  false },
-        }, 34);
-    txTable->setPosition(SIDEBAR_W + PAGE_PAD, 132.f);
-    txTable->setSize(WIN_W - SIDEBAR_W - PAGE_PAD * 2, WIN_H - 172.f);
+            { "TIMESTAMP",  190.f, false },
+            { "ACCOUNT #",  110.f, false },
+            { "TYPE",       150.f, false },
+            { "AMOUNT",     130.f, true  },
+            { "BALANCE",    130.f, true  },
+        }, 32);
+    txTable->setPosition(SIDEBAR_W + PAGE_PAD, 120.f);
+    txTable->setSize(WIN_W - SIDEBAR_W - PAGE_PAD * 2, WIN_H - 160.f);
 
     auto rebuildTxList = [txData, txTable] {
         std::vector<std::vector<std::string>> rows;
-        std::vector<sf::Color> accents;
         for (auto& t : *txData) {
             rows.push_back({ t.timestamp, std::to_string(t.accountNumber), t.type, money(t.amount), money(t.balanceAfter) });
-            // Deposit vs. withdrawal gets the same green/orange language the
-            // ATM uses for the same actions, via the row's left accent bar.
-            if (t.type == "Deposit") accents.push_back(ui::theme.success);
-            else if (t.type == "Withdraw" || t.type == "Withdrawal") accents.push_back(ui::theme.warning);
-            else accents.push_back(sf::Color::Transparent);
         }
-        txTable->setRows(rows, accents);
+        txTable->setRows(rows);
     };
     rebuildTxList();
 
     auto txFilterBox = add<TextBox>(owner, tabTransactions, regular, "Account # (blank = all)", true);
-    txFilterBox->setPosition(SIDEBAR_W + PAGE_PAD, 82.f); txFilterBox->setSize(220.f, 38.f);
+    txFilterBox->setPosition(SIDEBAR_W + PAGE_PAD, 68.f); txFilterBox->setSize(220.f, 38.f);
 
-    auto txFilterBtn = add<Button>(owner, tabTransactions, regular, "Filter",
+    auto txFilterBtn = add<Button>(owner, tabTransactions, regular, "Filter by Account #",
         [&bank, txFilterBox, txData, rebuildTxList] {
             try {
                 long long accNo = std::stoll(txFilterBox->value());
@@ -346,29 +315,28 @@ void RunAdminUI(Bank& bank) {
             } catch (...) { *txData = {}; }
             rebuildTxList();
         },
-        ui::theme.accent, ui::theme.textDark);
-    txFilterBtn->setPosition(SIDEBAR_W + PAGE_PAD + 236.f, 82.f); txFilterBtn->setSize(120.f, 38.f);
+        ui::theme.accent, ui::theme.textLight);
+    txFilterBtn->setPosition(SIDEBAR_W + PAGE_PAD + 236.f, 68.f); txFilterBtn->setSize(190.f, 38.f);
 
     auto txAllBtn = add<Button>(owner, tabTransactions, regular, "Show All",
         [&bank, txData, rebuildTxList] { *txData = bank.allTransactions(); rebuildTxList(); },
         ui::theme.textDim, ui::theme.textLight);
-    txAllBtn->setPosition(SIDEBAR_W + PAGE_PAD + 372.f, 82.f); txAllBtn->setSize(120.f, 38.f);
+    txAllBtn->setPosition(SIDEBAR_W + PAGE_PAD + 442.f, 68.f); txAllBtn->setSize(120.f, 38.f);
 
     // ==================================================================
     // TAB 4: Reset PIN
     // ==================================================================
     std::vector<Widget*> tabResetPin;
-    float rx = SIDEBAR_W + PAGE_PAD + 24.f;
-    float ry = PAGE_TOP + 40.f;
+    float rx = SIDEBAR_W + PAGE_PAD;
     auto rpAcc = add<TextBox>(owner, tabResetPin, regular, "Account number", true);
-    rpAcc->setPosition(rx, ry); rpAcc->setSize(380.f, 40.f);
+    rpAcc->setPosition(rx, PAGE_TOP); rpAcc->setSize(380.f, 40.f);
     auto rpCnic = add<TextBox>(owner, tabResetPin, regular, "CNIC on file (identity verification)");
-    rpCnic->setPosition(rx, ry + FIELD_GAP); rpCnic->setSize(380.f, 40.f);
+    rpCnic->setPosition(rx, PAGE_TOP + FIELD_GAP); rpCnic->setSize(380.f, 40.f);
     auto rpNewPin = add<TextBox>(owner, tabResetPin, regular, "New 4-digit PIN", true);
-    rpNewPin->setPosition(rx, ry + FIELD_GAP * 2); rpNewPin->setSize(380.f, 40.f);
+    rpNewPin->setPosition(rx, PAGE_TOP + FIELD_GAP * 2); rpNewPin->setSize(380.f, 40.f);
 
     auto rpMsg = add<Label>(owner, tabResetPin, regular, "", 14, ui::theme.success);
-    rpMsg->setPosition(rx, ry + FIELD_GAP * 3 + 48.f);
+    rpMsg->setPosition(rx, PAGE_TOP + FIELD_GAP * 3 + 46.f);
 
     auto rpBtn = add<Button>(owner, tabResetPin, regular, "Reset PIN",
         [&bank, rpAcc, rpCnic, rpNewPin, rpMsg] {
@@ -378,20 +346,19 @@ void RunAdminUI(Bank& bank) {
             rpMsg->setText(res.message);
             if (res.ok) { rpAcc->clear(); rpCnic->clear(); rpNewPin->clear(); }
         },
-        ui::theme.warning, ui::theme.textDark);
-    rpBtn->setPosition(rx, ry + FIELD_GAP * 3); rpBtn->setSize(200.f, 44.f);
+        ui::theme.accent, ui::theme.textLight);
+    rpBtn->setPosition(rx, PAGE_TOP + FIELD_GAP * 3); rpBtn->setSize(190.f, 42.f);
 
     // ==================================================================
     // TAB 5: Delete & Report
     // ==================================================================
     std::vector<Widget*> tabDelete;
-    float dx = SIDEBAR_W + PAGE_PAD + 24.f;
-    float dy = PAGE_TOP + 40.f;
+    float dx = SIDEBAR_W + PAGE_PAD;
     auto delAcc = add<TextBox>(owner, tabDelete, regular, "Account number (must be Inactive)", true);
-    delAcc->setPosition(dx, dy); delAcc->setSize(380.f, 40.f);
+    delAcc->setPosition(dx, PAGE_TOP); delAcc->setSize(380.f, 40.f);
 
     auto delMsg = add<Label>(owner, tabDelete, regular, "", 14, ui::theme.success);
-    delMsg->setPosition(dx, dy + FIELD_GAP + 48.f);
+    delMsg->setPosition(dx, PAGE_TOP + FIELD_GAP + 46.f);
 
     auto delBtn = add<Button>(owner, tabDelete, regular, "Delete Closed Account",
         [&bank, delAcc, delMsg] {
@@ -402,15 +369,16 @@ void RunAdminUI(Bank& bank) {
             if (res.ok) delAcc->clear();
         },
         ui::theme.danger, ui::theme.textLight);
-    delBtn->setPosition(dx, dy + FIELD_GAP); delBtn->setSize(240.f, 42.f);
+    delBtn->setPosition(dx, PAGE_TOP + FIELD_GAP); delBtn->setSize(240.f, 40.f);
 
+    // Report table (replaces the old plain-text ostringstream dump)
     auto reportTable = add<Table>(owner, tabDelete, regular, bold,
         std::vector<TableColumn>{
-            { "METRIC", 220.f, false, false },
-            { "VALUE",  140.f, true,  false },
+            { "METRIC", 220.f, false },
+            { "VALUE",  140.f, true  },
         }, 34);
-    reportTable->setPosition(SIDEBAR_W + PAGE_PAD * 2 + 420.f, PAGE_TOP + 40.f);
-    reportTable->setSize(360.f, 34.f * 6 + 34.f);
+    reportTable->setPosition(dx, PAGE_TOP + FIELD_GAP * 2 + 20.f);
+    reportTable->setSize(360.f, 34.f * 6 + 34.f);  // header + 6 rows
 
     // ------------------------------------------------------------------
     // Main loop
@@ -436,57 +404,44 @@ void RunAdminUI(Bank& bank) {
             sidebar.setFillColor(ui::theme.sidebarBg);
             window.draw(sidebar);
 
-            // Gold plaque header, echoing the ATM's "BANK ATM" plaque so the
-            // sidebar reads as the same hardware family instead of a
-            // generic dashboard chrome.
-            sf::FloatRect plaque(16.f, 24.f, SIDEBAR_W - 32.f, 46.f);
-            ui::drawRoundedRect(window, plaque, 12.f, ui::theme.accent);
-            sf::Text title("ADMIN", bold, 18);
+            sf::Text title("ADMIN DASHBOARD", bold, 18);
+            title.setFillColor(ui::theme.textLight);
             title.setStyle(sf::Text::Bold);
-            title.setFillColor(sf::Color(20, 30, 55));
-            auto tb = title.getLocalBounds();
-            title.setPosition(std::round(plaque.left + (plaque.width - tb.width) / 2.f - tb.left),
-                               std::round(plaque.top + (plaque.height - tb.height) / 2.f - tb.top - 2.f));
+            title.setPosition(20.f, 34.f);
             window.draw(title);
 
-            sf::Text subtitle("BANK ATM SYSTEM", regular, 10);
-            subtitle.setFillColor(sf::Color(150, 170, 205));
-            subtitle.setStyle(sf::Text::Bold);
-            auto sb = subtitle.getLocalBounds();
-            subtitle.setPosition(std::round((SIDEBAR_W - sb.width) / 2.f), 78.f);
-            window.draw(subtitle);
+            sf::RectangleShape rule({SIDEBAR_W - 40.f, 1.f});
+            rule.setPosition(20.f, 70.f);
+            rule.setFillColor(sf::Color(255, 255, 255, 40));
+            window.draw(rule);
 
-            sf::Vector2f mouse = window.mapPixelToCoords(sf::Mouse::getPosition(window));
             for (size_t i = 0; i < navButtons.size(); ++i) {
                 auto* btn = navButtons[i];
+                sf::Vector2f mouse = window.mapPixelToCoords(sf::Mouse::getPosition(window));
                 bool hovered = btn->bounds().contains(mouse);
                 bool selected = static_cast<int>(i) == currentTab;
 
+                if (selected || hovered) {
+                    sf::Color pill = selected ? ui::theme.sidebarSelected : sf::Color(255, 255, 255, 22);
+                    ui::drawRoundedRect(window, btn->bounds(), 8.f, pill);
+                }
                 if (selected) {
-                    sf::FloatRect glow = btn->bounds();
-                    glow.left -= 3.f; glow.top -= 3.f; glow.width += 6.f; glow.height += 6.f;
-                    ui::drawRoundedRect(window, glow, 11.f, sf::Color(250, 196, 45, 30));
-                    ui::drawRoundedRect(window, btn->bounds(), 9.f, ui::theme.sidebarSelected,
-                                         ui::theme.accent, 1.4f);
-                } else if (hovered) {
-                    ui::drawRoundedRect(window, btn->bounds(), 9.f, sf::Color(255, 255, 255, 16));
+                    sf::RectangleShape accent({3.f, btn->bounds().height - 12.f});
+                    accent.setPosition(btn->bounds().left - 0.f, btn->bounds().top + 6.f);
+                    accent.setFillColor(ui::theme.textLight);
+                    window.draw(accent);
                 }
 
-                sf::Color iconColor = selected ? ui::theme.accent : sf::Color(175, 190, 218);
-                ui::drawNavIcon(window,
-                                 {btn->bounds().left + 26.f, btn->bounds().top + btn->bounds().height / 2.f},
-                                 static_cast<int>(i), iconColor);
-
-                sf::Text label(tabNames[i], regular, 14);
-                if (selected) { label.setStyle(sf::Text::Bold); label.setFillColor(ui::theme.textLight); }
-                else label.setFillColor(sf::Color(190, 202, 222));
-                label.setPosition(std::round(btn->bounds().left + 48.f),
-                                   std::round(btn->bounds().top + (btn->bounds().height - 16.f) / 2.f));
+                sf::Text label(tabNames[i], regular, 15);
+                if (selected) label.setStyle(sf::Text::Bold);
+                label.setFillColor(ui::theme.textLight);
+                label.setPosition(std::round(btn->bounds().left + 18.f),
+                                   std::round(btn->bounds().top + (btn->bounds().height - 18.f) / 2.f));
                 window.draw(label);
             }
 
             sf::Text quit("Esc or window close to quit", regular, 11);
-            quit.setFillColor(sf::Color(140, 155, 185));
+            quit.setFillColor(sf::Color(200, 210, 230));
             quit.setPosition(20.f, WIN_H - 28.f);
             window.draw(quit);
         }
@@ -498,79 +453,35 @@ void RunAdminUI(Bank& bank) {
             screenTitle.setFillColor(ui::theme.textDark);
             screenTitle.setPosition(SIDEBAR_W + PAGE_PAD, 24.f);
             window.draw(screenTitle);
-
-            sf::RectangleShape underline({36.f, 3.f});
-            underline.setPosition(SIDEBAR_W + PAGE_PAD + 1.f, 56.f);
-            underline.setFillColor(ui::theme.accent);
-            window.draw(underline);
         }
 
         if (currentTab == 0) {
             auto r = bank.generateSummaryReport();
-            float cx = SIDEBAR_W + PAGE_PAD, cy = 82.f, cw = 280.f, ch = 108.f, gap = 22.f;
-            ui::drawCard(window, regular, {cx, cy, cw, ch}, "TOTAL ACCOUNTS", std::to_string(r.totalAccounts), ui::theme.accentDim, true);
-            ui::drawCard(window, regular, {cx + cw + gap, cy, cw, ch}, "TOTAL BALANCE", money(r.totalBalance), ui::theme.success, true);
-            ui::drawCard(window, regular, {cx + 2 * (cw + gap), cy, cw, ch}, "TOTAL TRANSACTIONS", std::to_string(r.totalTransactions), sf::Color(150, 90, 200), true);
-            ui::drawCard(window, regular, {cx, cy + ch + gap, cw, ch}, "ACTIVE", std::to_string(r.activeAccounts), ui::theme.success, true);
-            ui::drawCard(window, regular, {cx + cw + gap, cy + ch + gap, cw, ch}, "INACTIVE", std::to_string(r.inactiveAccounts), ui::theme.textDim, false);
-            ui::drawCard(window, regular, {cx + 2 * (cw + gap), cy + ch + gap, cw, ch}, "LOCKED", std::to_string(r.lockedAccounts), ui::theme.danger, false);
-
-            sf::Text qaLabel("QUICK ACTIONS", bold, 12);
-            qaLabel.setStyle(sf::Text::Bold);
-            qaLabel.setFillColor(ui::theme.textDim);
-            qaLabel.setPosition(cx, cy + 2.f * (ch + gap) + 18.f);
-            window.draw(qaLabel);
-        } else if (currentTab == 1) {
-            ui::drawSectionCard(window, bold, {cardLeft, PAGE_TOP, cardW, FIELD_GAP * 6.f + 96.f},
-                                 "New Customer Details", ui::theme.accent);
+            float cx = SIDEBAR_W + PAGE_PAD, cy = 78.f, cw = 280.f, ch = 100.f, gap = 22.f;
+            ui::drawCard(window, regular, {cx, cy, cw, ch}, "TOTAL ACCOUNTS", std::to_string(r.totalAccounts), ui::theme.accent);
+            ui::drawCard(window, regular, {cx + cw + gap, cy, cw, ch}, "TOTAL BALANCE", money(r.totalBalance), ui::theme.success);
+            ui::drawCard(window, regular, {cx + 2 * (cw + gap), cy, cw, ch}, "TOTAL TRANSACTIONS", std::to_string(r.totalTransactions), sf::Color(150, 90, 200));
+            ui::drawCard(window, regular, {cx, cy + ch + gap, cw, ch}, "ACTIVE", std::to_string(r.activeAccounts), ui::theme.success);
+            ui::drawCard(window, regular, {cx + cw + gap, cy + ch + gap, cw, ch}, "INACTIVE", std::to_string(r.inactiveAccounts), ui::theme.textDim);
+            ui::drawCard(window, regular, {cx + 2 * (cw + gap), cy + ch + gap, cw, ch}, "LOCKED", std::to_string(r.lockedAccounts), ui::theme.danger);
         } else if (currentTab == 2) {
-            ui::drawPanelBackground(window, {ax, 62.f, 526.f, 322.f}, ui::theme.cardBg, ui::theme.border);
-            ui::drawSectionCard(window, bold, {ax, 62.f, 526.f, 322.f}, "Accounts", ui::theme.accent);
-
-            ui::drawSectionCard(window, bold, {ax + 540.f, 62.f, WIN_W - (ax + 540.f) - PAGE_PAD, 210.f},
-                                 "Account Detail", sf::Color(90, 160, 250));
             auto* c = currentSelected();
+            ui::drawPanelBackground(window, {ax + 540.f, 68.f, WIN_W - (ax + 540.f) - PAGE_PAD, 160.f}, ui::theme.cardBg, ui::theme.border);
             if (c) {
-                sf::Color pillColor = ui::statusColor(c->status);
-                (void)pillColor;
-                float py = 108.f;
-                float pw = ui::drawStatusPill(window, regular, {ax + 558.f, py}, c->status);
-
-                sf::Text head("#" + std::to_string(c->accountNumber) + "  " + c->name, bold, 15);
-                head.setStyle(sf::Text::Bold);
-                head.setFillColor(ui::theme.textDark);
-                head.setPosition(ax + 558.f + pw + 12.f, py + 2.f);
-                window.draw(head);
-
+                sf::Color pillColor = statusColor(c->status);
                 std::ostringstream d;
-                d << money(c->balance) << "\n\n"
+                d << "#" << c->accountNumber << "   " << c->name << "\n\n"
+                  << c->status << "   ·   " << money(c->balance) << "\n"
                   << c->phone << "\n"
                   << c->address << "\n"
                   << "Opened " << c->createdDate;
                 accDetail->setText(d.str());
-                accDetail->setPosition(ax + 558.f, py + 34.f);
+                accDetail->setPosition(ax + 556.f, 84.f);
             } else {
-                accDetail->setText("Select an account from the table, then click\n'Load Into Editor' to edit it.");
-                accDetail->setPosition(ax + 558.f, 108.f);
+                accDetail->setText("Select an account from the table, then click\n'Load Selected Into Editor' to edit it.");
+                accDetail->setPosition(ax + 556.f, 84.f);
             }
-
-            ui::drawSectionCard(window, bold, {ax + 540.f, 284.f, WIN_W - (ax + 540.f) - PAGE_PAD, 100.f},
-                                 "Quick Transaction", ui::theme.success);
-            ui::drawSectionCard(window, bold, {ex - 18.f, ey - 40.f, 526.f, 300.f},
-                                 "Edit & Status", ui::theme.warning);
-        } else if (currentTab == 3) {
-            ui::drawSectionCard(window, bold, {SIDEBAR_W + PAGE_PAD, 62.f, WIN_W - SIDEBAR_W - PAGE_PAD * 2, 56.f},
-                                 "Filter", ui::theme.accent);
-        } else if (currentTab == 4) {
-            ui::drawSectionCard(window, bold, {cardLeft, PAGE_TOP, 470.f, FIELD_GAP * 3.f + 96.f},
-                                 "Verify & Reset", ui::theme.warning);
         } else if (currentTab == 5) {
-            ui::drawSectionCard(window, bold, {cardLeft, PAGE_TOP, 420.f, FIELD_GAP + 92.f},
-                                 "Delete Closed Account", ui::theme.danger);
-            ui::drawSectionCard(window, bold,
-                                 {SIDEBAR_W + PAGE_PAD * 2.f + 420.f, PAGE_TOP, 360.f, 34.f * 7.f + 40.f},
-                                 "Summary Report", ui::theme.accent);
-
             auto r = bank.generateSummaryReport();
             std::vector<std::vector<std::string>> rows = {
                 { "Total accounts",     std::to_string(r.totalAccounts) },

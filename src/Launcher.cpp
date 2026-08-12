@@ -1,6 +1,7 @@
 #include "Launcher.h"
 
 #include "ATM.h"
+#include "AdminLogin.h"
 #include "Bank.h"
 #include "UI.h"
 #include "Widgets.h"
@@ -380,7 +381,7 @@ void RunLauncherUI() {
     // bordered card look. NOTE: this assumes Button tolerates a blank label
     // and honors alpha 0 for its fill color; if Widgets.h enforces something
     // different, share it and this can be adjusted.
-    auto adminBtn = add<Button>(owner, tab, regular, " ", [&bank] { RunAdminUI(bank); },
+    auto adminBtn = add<Button>(owner, tab, regular, " ", [&bank] { RunAdminLoginUI(bank); },
                                  sf::Color(0, 0, 0, 0), sf::Color(0, 0, 0, 0));
     adminBtn->setPosition(adminSpec.x, cardY);
     adminBtn->setSize(adminSpec.w, cardH);
