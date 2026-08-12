@@ -304,6 +304,21 @@ std::string screenTitleFor(ATMState s) {
     }
 }
 
+ATMState escapeTargetFor(ATMState s) {
+    switch (s) {
+        case ATMState::EnteringPIN:       return ATMState::Logout;
+        case ATMState::MainMenu:          return ATMState::EnteringPIN;
+        case ATMState::BalanceInquiry:
+        case ATMState::Deposit:
+        case ATMState::Withdraw:
+        case ATMState::MiniStatement:
+        case ATMState::ChangePIN:
+        case ATMState::TransactionSuccess:
+        case ATMState::TransactionFailed: return ATMState::MainMenu;
+        default:                          return s;
+    }
+}
+
 struct ATMContext {
     Bank* bank = nullptr;
     long long accountNumber = 0;
@@ -1497,44 +1512,21 @@ void RunATMUI(Bank& bank) {
 
     ATMContext ctx;
     ctx.bank = &bank;
-    
-    // ----- DEFAULT ACCOUNT: change this to any existing account -----
-    const long long DEFAULT_ACCOUNT = 100000001;
-    // ----------------------------------------------------------------
 
-    // Try to load this account from the bank.
-    auto customerOpt = bank.findByAccountNumber(DEFAULT_ACCOUNT);
-    if (customerOpt.has_value()) {
-        ctx.accountNumber = DEFAULT_ACCOUNT;
-        ctx.currentCustomer = customerOpt.value();
-        // We skip PIN entry – we're already "authenticated" for demo.
-        // If you want PIN verification, you can still require it, but this bypasses it.
-        ctx.nextState = ATMState::MainMenu;   // go directly to main menu
-    } else {
-        // Fallback: if the default account doesn't exist, show the account-entry overlay.
-        ctx.accountNumber = DEFAULT_ACCOUNT; // still set it, but user can change
-        // We'll leave enteringAccount = true (see below)
-    }
+    // ----- DEFAULT ACCOUNT: pre-fills the account-number field as a demo hint -----
+    const long long DEFAULT_ACCOUNT = 100000001;
+    // -------------------------------------------------------------------------
 
     CashDispenser dispenser(font);
 
-    // Decide which screen to start with
-    std::unique_ptr<ATMScreen> currentScreen;
+    // Every session starts at the login screen: account number first, then
+    // PIN, before anything else is reachable. No auto-login — this is what
+    // lets a different account be used after logout instead of always
+    // landing back on the same one.
+    std::unique_ptr<ATMScreen> currentScreen = std::make_unique<CardInsertScreen>(font, ctx);
     ATMState currentState = ATMState::Idle;  // tracked for the header subtitle
-    bool enteringAccount = false;  // we'll try to skip it
-
-    if (customerOpt.has_value()) {
-        // Account found – start with Main Menu directly.
-        currentScreen = std::make_unique<MainMenuScreen>(font, ctx);
-        currentState = ATMState::MainMenu;
-        enteringAccount = false;
-    } else {
-        // Account not found – show the account‑entry overlay.
-        currentScreen = std::make_unique<CardInsertScreen>(font, ctx);
-        currentState = ATMState::Idle;
-        enteringAccount = true;
-        ctx.nextState = ATMState::Idle;
-    }
+    bool enteringAccount = true;
+    ctx.nextState = ATMState::Idle;
 
     sf::Clock clock;
     std::string accStr = std::to_string(DEFAULT_ACCOUNT);
@@ -1561,9 +1553,10 @@ void RunATMUI(Bank& bank) {
                                       event.type == sf::Event::MouseButtonPressed)) {
                 idleClock.restart();
             }
-            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape) {
-                if (ctx.nextState != ATMState::Idle && ctx.nextState != ATMState::EnteringPIN) {
-                    ctx.nextState = ATMState::MainMenu;
+            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape && !enteringAccount) {
+                ATMState backState = escapeTargetFor(currentState);
+                if (backState != currentState) {
+                    ctx.nextState = backState;
                 }
             }
             if (enteringAccount) {
@@ -1574,17 +1567,19 @@ void RunATMUI(Bank& bank) {
                         if (!accStr.empty()) accStr.pop_back();
                     } else if (event.key.code == sf::Keyboard::Enter) {
                         try {
-                            ctx.accountNumber = std::stoll(accStr);
+                            long long enteredAccount = std::stoll(accStr);
                             // Try to load the customer
-                            auto found = bank.findByAccountNumber(ctx.accountNumber);
+                            auto found = bank.findByAccountNumber(enteredAccount);
                             if (found.has_value()) {
                                 sound::cardInsert();
                                 idleClock.restart();
+                                ctx.accountNumber = enteredAccount;
                                 ctx.currentCustomer = found.value();
+                                // Account number alone isn't enough — hand off
+                                // to the PIN screen next, same as the normal
+                                // state machine does everywhere else.
                                 enteringAccount = false;
-                                ctx.nextState = ATMState::MainMenu;
-                                currentState = ATMState::MainMenu;
-                                currentScreen = std::make_unique<MainMenuScreen>(font, ctx);
+                                ctx.nextState = ATMState::EnteringPIN;
                             } else {
                                 // account not found – keep overlay
                                 accStr = std::to_string(DEFAULT_ACCOUNT);
