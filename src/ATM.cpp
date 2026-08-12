@@ -296,7 +296,7 @@ std::string screenTitleFor(ATMState s) {
         case ATMState::Deposit:           return "DEPOSIT";
         case ATMState::Withdraw:          return "WITHDRAWAL";
         case ATMState::MiniStatement:     return "MINI STATEMENT";
-        case ATMState::ChangePIN:         return "CHANGE PIN";
+        case ATMState::ChangePIN:         return "";
         case ATMState::Processing:        return "PROCESSING";
         case ATMState::TransactionSuccess:
         case ATMState::TransactionFailed: return "TRANSACTION RESULT";
@@ -1261,14 +1261,16 @@ public:
         sf::Text title("CHANGE PIN", font_, 22);
         title.setStyle(sf::Text::Bold);
         title.setFillColor(ATM_TEXT);
-        title.setPosition((WIN_W - title.getLocalBounds().width) / 2.f, 20.f);
+        title.setPosition((WIN_W - title.getLocalBounds().width) / 2.f, 168.f);
         window.draw(title);
 
         std::vector<std::string> labels = {"Enter current PIN", "Enter new PIN", "Confirm new PIN"};
         std::string* pins[] = {&oldPin_, &newPin_, &confirmPin_};
+        const float startY = 214.f;
+        const float rowGap = 76.f;
 
         for (int i = 0; i < 3; ++i) {
-            float y = 80.f + i * 100.f;
+            float y = startY + i * rowGap;
             bool active = (i == state_);
 
             sf::Text label(labels[i], font_, 14);
@@ -1279,7 +1281,7 @@ public:
             // PIN dots
             for (int j = 0; j < 4; ++j) {
                 sf::CircleShape dot(8.f);
-                dot.setPosition(WIN_W/2.f - 80.f + j * 44.f, y + 30.f);
+                dot.setPosition(WIN_W / 2.f - 80.f + j * 44.f, y + 30.f);
                 if (j < static_cast<int>(pins[i]->size())) {
                     dot.setFillColor(active ? ATM_ACCENT : ATM_TEXT_DIM);
                 } else {
@@ -1295,12 +1297,12 @@ public:
         if (!error_.empty()) {
             sf::Text err(error_, font_, 14);
             err.setFillColor(ATM_DANGER);
-            err.setPosition((WIN_W - err.getLocalBounds().width) / 2.f, 380.f);
+            err.setPosition((WIN_W - err.getLocalBounds().width) / 2.f, 430.f);
             window.draw(err);
         }
 
         // Cancel button
-        sf::FloatRect cancelRect(160.f, 420.f, 160.f, 45.f);
+        sf::FloatRect cancelRect(145.f, 474.f, 190.f, 46.f);
         cancelBtn_ = cancelRect;
         sf::Vector2f mouse = window.mapPixelToCoords(sf::Mouse::getPosition(window));
         sf::Color bg = sf::Color(60, 40, 40);
