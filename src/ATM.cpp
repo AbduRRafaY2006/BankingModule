@@ -319,6 +319,11 @@ ATMState escapeTargetFor(ATMState s) {
     }
 }
 
+bool isActiveAccount(const Bank& bank, long long accNo) {
+    auto customer = bank.findByAccountNumber(accNo);
+    return customer.has_value() && customer->status == "Active";
+}
+
 struct ATMContext {
     Bank* bank = nullptr;
     long long accountNumber = 0;
@@ -423,6 +428,22 @@ public:
         pin_.reserve(4);
     }
 
+private:
+    void registerFailedAttempt() {
+        ++failedAttempts_;
+        pin_.clear();
+        if (failedAttempts_ >= 3) {
+            error_ = "Too many failed attempts. Exiting ATM.";
+            ctx_.nextState = ATMState::Logout;
+            return;
+        }
+        error_ = "Invalid PIN. Please try again.";
+        shaking_ = true;
+        shakeClock_.restart();
+    }
+
+public:
+
     void handleEvent(const sf::Event& e, sf::RenderWindow& window) override {
         if (e.type == sf::Event::KeyPressed) {
             if (e.key.code >= sf::Keyboard::Num0 && e.key.code <= sf::Keyboard::Num9) {
@@ -441,11 +462,9 @@ public:
                         ctx_.currentCustomer = result.value();
                         ctx_.nextState = ATMState::MainMenu;
                         pin_.clear();
+                        failedAttempts_ = 0;
                     } else {
-                        error_ = "Invalid PIN. Please try again.";
-                        pin_.clear();
-                        shaking_ = true;
-                        shakeClock_.restart();
+                        registerFailedAttempt();
                     }
                 }
             }
@@ -465,12 +484,10 @@ public:
                                 ctx_.currentCustomer = result.value();
                                 ctx_.nextState = ATMState::MainMenu;
                                 pin_.clear();
+                                failedAttempts_ = 0;
                                 error_.clear();
                             } else {
-                                error_ = "Invalid PIN";
-                                pin_.clear();
-                                shaking_ = true;
-                                shakeClock_.restart();
+                                registerFailedAttempt();
                             }
                         }
                     } else if (pin_.size() < 4) {
@@ -590,6 +607,7 @@ private:
     ATMContext& ctx_;
     std::string pin_;
     std::string error_;
+    int failedAttempts_ = 0;
     std::vector<std::pair<sf::FloatRect, int>> keypadButtons_;
     bool shaking_ = false;
     sf::Clock shakeClock_;
@@ -1532,6 +1550,7 @@ void RunATMUI(Bank& bank) {
 
     sf::Clock clock;
     std::string accStr = std::to_string(DEFAULT_ACCOUNT);
+    std::string accountEntryError;
 
     // Idle timeout: resets on any input while authenticated. Past kIdleWarn
     // seconds, a countdown banner appears; past kIdleLogout, the session
@@ -1573,17 +1592,24 @@ void RunATMUI(Bank& bank) {
                             // Try to load the customer
                             auto found = bank.findByAccountNumber(enteredAccount);
                             if (found.has_value()) {
-                                sound::cardInsert();
-                                idleClock.restart();
-                                ctx.accountNumber = enteredAccount;
-                                ctx.currentCustomer = found.value();
-                                // Account number alone isn't enough — hand off
-                                // to the PIN screen next, same as the normal
-                                // state machine does everywhere else.
-                                enteringAccount = false;
-                                ctx.nextState = ATMState::EnteringPIN;
+                                if (found->status != "Active") {
+                                    accountEntryError = "Account is not active.";
+                                    accStr = std::to_string(DEFAULT_ACCOUNT);
+                                } else {
+                                    sound::cardInsert();
+                                    idleClock.restart();
+                                    ctx.accountNumber = enteredAccount;
+                                    ctx.currentCustomer = found.value();
+                                    accountEntryError.clear();
+                                    // Account number alone isn't enough — hand off
+                                    // to the PIN screen next, same as the normal
+                                    // state machine does everywhere else.
+                                    enteringAccount = false;
+                                    ctx.nextState = ATMState::EnteringPIN;
+                                }
                             } else {
                                 // account not found – keep overlay
+                                accountEntryError = "Account not found.";
                                 accStr = std::to_string(DEFAULT_ACCOUNT);
                             }
                         } catch (...) {}
@@ -1599,6 +1625,10 @@ void RunATMUI(Bank& bank) {
                 // Normal screen event handling
                 currentScreen->handleEvent(event, window);
             }
+        }
+
+        if (!enteringAccount && !isActiveAccount(bank, ctx.accountNumber)) {
+            ctx.nextState = ATMState::Logout;
         }
 
         // State transitions (only when not in account entry).
@@ -1701,6 +1731,13 @@ void RunATMUI(Bank& bank) {
             demo.setFillColor(ATM_TEXT_DIM);
             demo.setPosition((WIN_W - demo.getLocalBounds().width) / 2.f, 360.f);
             window.draw(demo);
+
+            if (!accountEntryError.empty()) {
+                sf::Text err(accountEntryError, font, 14);
+                err.setFillColor(ATM_DANGER);
+                err.setPosition((WIN_W - err.getLocalBounds().width) / 2.f, 390.f);
+                window.draw(err);
+            }
         } else {
             currentScreen->draw(window);
 
